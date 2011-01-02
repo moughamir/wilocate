@@ -2,41 +2,63 @@
 
 from subprocess import Popen, PIPE, STDOUT
 import re, httplib, urllib, json, os, sys
-from itertools import groupby
+
+def usage():
+  print '\n  Usage:\n\n' + sys.argv[0] + '\t\t\tLocate actual position using WiFi scanning\n' + sys.argv[0] + ' <MAC address>\tLocate given MAC address position\n' + sys.argv[0] + ' --help|-h\t\tThis help\n\n  Progress symbols:\n\n* new wifi AP detected\n. incomplete geographic data returned, retry\n+ complete geographic data returned\n- geographic data request failed, skipping address\n! connection error, retry'
 
 print '+ WiLocate		Version 0.1'
-print ' ',
+
+
+addr=[]
 
 if len(sys.argv) == 2:
   
-  if not re.match("(?:[0-9A-Z][0-9A-Z](:|-)?){6}", sys.argv[1]):
+  if(sys.argv[1]=='--help' or sys.argv[1]=='-h'):
+    usage()
+    sys.exit(0)
+  
+  elif not re.match("(?:[0-9A-Z][0-9A-Z](:|-)?){6}", sys.argv[1]):
     print '! Error: \'' + sys.argv[1] + '\' is not a MAC address with AA:BB:CC:DD:EE:FF format. Exiting.'
     sys.exit(1)
     
   addr = [ sys.argv[1] ]
 
 elif len(sys.argv) == 1:
+  
+  if os.getuid() != 0:
+    print '+ Warning: triggered scan needs root privileges. Restart with \'sudo ' + sys.argv[0] + '\' to get more results.'
+
+
   for i in range(3):
+    newaddr=[]
+    
     cmd = 'iwlist scan'
     p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
-    rawaddr = re.findall('Address: ((?:[0-9A-Z][0-9A-Z]:?){6})', p.stdout.read())
-    addr = [ a for a in rawaddr]
-    print '!',
+    newaddr = re.findall('Address: ((?:[0-9A-Z][0-9A-Z]:?){6})', p.stdout.read())
+    
+    if len(set(addr + newaddr)) > len(addr):
+      print '* '*(len(set(addr + newaddr))-len(addr)),
+    
+    addr = list(set(addr + newaddr))
+    
     sys.stdout.flush()
 
 else:
-  print '+ Usage:\n+ ' + sys.argv[0] + '\t\tLocate actual position using WiFi scanning\n+ ' + sys.argv[0] + ' <MAC address>\t\tLocate given MAC address position'
+  usage()
   sys.exit(0)
 
 
-if os.getuid() != 0:
-  print '! Warning: triggered scan needs root privileges. Restart with \'sudo ' + sys.argv[0] + '\' to get more results.'
+if len(addr)==0:
+  print '! No AP founded while scanning. Exiting.'
+  sys.exit(0)
 
 jsons=[]
 
 for a in addr:
 
-  for done in range(3):
+  done=False
+
+  for r in range(3):
     
     sys.stdout.flush()
     
@@ -44,8 +66,13 @@ for a in addr:
     params = "{ \"version\": \"1.1.0\", \"host\": \"maps.google.com\", \"request_address\": \"true\", \"address_language\":\"en_GB\", \"wifi_towers\": [ { \"mac_address\": " + a.replace(':','-') + ", \"signal_strength\": 8, \"age\": 0 } ] }"
     headers = { "Pragma" : "no-cache", "Cache-control" : "no-cache" }
     conn = httplib.HTTPConnection("www.google.com:80")
-    conn.request("POST", "/loc/json", params, headers)
-    response = conn.getresponse()
+    try:
+      conn.request("POST", "/loc/json", params, headers)
+      response = conn.getresponse()
+    except Exception, e:
+      print '!', 
+      continue
+    
     j = json.loads(response.read())
     
     if not ('location' in j and 'address' in j['location']):
@@ -55,15 +82,16 @@ for a in addr:
       print '+',
       j['mac_address']=a
       jsons.append(j)
+      done=True
       break
    
-  if done == 2:
+  if not done:
     print '-',
 
 print ''
 
 if len(jsons)==0:
-  print '! No mapped WiFi MAC address founded. Exiting.'
+  print '! No mapped WiFi MAC address founded in Google API database. Exiting.'
   sys.exit(0)
 
 jsons.sort(key=lambda j: j['location']['accuracy'], reverse=True)
