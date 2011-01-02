@@ -4,7 +4,7 @@ from subprocess import Popen, PIPE, STDOUT
 import re, httplib, urllib, json, os, sys
 from itertools import groupby
 
-print '+ WiLocator		Version 0.1'
+print '+ WiLocate		Version 0.1'
 
 
 if len(sys.argv) == 2:
