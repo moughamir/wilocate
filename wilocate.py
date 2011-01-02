@@ -19,7 +19,7 @@ elif len(sys.argv) == 1:
   cmd = 'iwlist scan'
   p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
   rawaddr = re.findall('Address: ((?:[0-9A-Z][0-9A-Z]:?){6})', p.stdout.read())
-  addr = [ a.replace(':','-') for a in rawaddr]
+  addr = [ a for a in rawaddr]
 
 else:
   print '+ Usage:\n+ ' + sys.argv[0] + '\t\tLocate actual position using WiFi scanning\n+ ' + sys.argv[0] + ' <MAC address>\t\tLocate given MAC address position'
