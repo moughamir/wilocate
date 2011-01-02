@@ -5,7 +5,7 @@ import re, httplib, urllib, json, os, sys
 from itertools import groupby
 
 print '+ WiLocate		Version 0.1'
-
+print ' ',
 
 if len(sys.argv) == 2:
   
@@ -122,4 +122,4 @@ for j in jsons:
 	print j['location']['address']['street_number'],
 	
       print ''
-      print '                  http://maps.google.it/maps?q=' + str(longitude) + ',' + str(latitude)
+      print '                  http://maps.google.it/maps?q=' + str(latitude) + ',' + str(longitude)
