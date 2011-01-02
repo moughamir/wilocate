@@ -27,7 +27,7 @@ else:
 
 
 if os.getuid() != 0:
-  print '! Warning: triggered scans needs high privileges. Execute as root to get more accurate results.'
+  print '! Warning: triggered scan needs high privileges. Execute as root to get more accurate results.'
 
 jsons=[]
 
