@@ -16,10 +16,13 @@ if len(sys.argv) == 2:
   addr = [ sys.argv[1] ]
 
 elif len(sys.argv) == 1:
-  cmd = 'iwlist scan'
-  p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
-  rawaddr = re.findall('Address: ((?:[0-9A-Z][0-9A-Z]:?){6})', p.stdout.read())
-  addr = [ a for a in rawaddr]
+  for i in range(3):
+    cmd = 'iwlist scan'
+    p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
+    rawaddr = re.findall('Address: ((?:[0-9A-Z][0-9A-Z]:?){6})', p.stdout.read())
+    addr = [ a for a in rawaddr]
+    print '!',
+    sys.stdout.flush()
 
 else:
   print '+ Usage:\n+ ' + sys.argv[0] + '\t\tLocate actual position using WiFi scanning\n+ ' + sys.argv[0] + ' <MAC address>\t\tLocate given MAC address position'
@@ -27,23 +30,43 @@ else:
 
 
 if os.getuid() != 0:
-  print '! Warning: triggered scan needs high privileges. Execute as root to get more accurate results.'
+  print '! Warning: triggered scan needs root privileges. Restart with \'sudo ' + sys.argv[0] + '\' to get more results.'
 
 jsons=[]
 
 for a in addr:
 
-  params = "{ \"version\": \"1.1.0\", \"host\": \"maps.google.com\", \"request_address\": \"true\", \"address_language\":\"en_GB\", \"wifi_towers\": [ { \"mac_address\": " + a.replace(':','-') + ", \"signal_strength\": 8, \"age\": 0 } ] }"
-  headers = { "Pragma" : "no-cache", "Cache-control" : "no-cache" }
-  conn = httplib.HTTPConnection("www.google.com:80")
-  conn.request("POST", "/loc/json", params, headers)
-  response = conn.getresponse()
-  j = json.loads(response.read())
-  j['mac_address']=a
-  jsons.append(j)
+  for done in range(3):
+    
+    sys.stdout.flush()
+    
+
+    params = "{ \"version\": \"1.1.0\", \"host\": \"maps.google.com\", \"request_address\": \"true\", \"address_language\":\"en_GB\", \"wifi_towers\": [ { \"mac_address\": " + a.replace(':','-') + ", \"signal_strength\": 8, \"age\": 0 } ] }"
+    headers = { "Pragma" : "no-cache", "Cache-control" : "no-cache" }
+    conn = httplib.HTTPConnection("www.google.com:80")
+    conn.request("POST", "/loc/json", params, headers)
+    response = conn.getresponse()
+    j = json.loads(response.read())
+    
+    if not ('location' in j and 'address' in j['location']):
+      print '.',
+      continue
+    else:
+      print '+',
+      j['mac_address']=a
+      jsons.append(j)
+      break
+   
+  if done == 2:
+    print '-',
+
+print ''
+
+if len(jsons)==0:
+  print '! No mapped WiFi MAC address founded. Exiting.'
+  sys.exit(0)
 
 jsons.sort(key=lambda j: j['location']['accuracy'], reverse=True)
-
 
 for j in jsons:
 
