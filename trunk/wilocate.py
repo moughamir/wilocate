@@ -3,6 +3,10 @@
 from subprocess import Popen, PIPE, STDOUT
 import re, httplib, urllib, json, os, sys
 
+
+#sudo tcpdump -i mon0 -s 0 -e link[25] != 0x80
+#sudo aa-complain /usr/sbin/tcpdump
+
 def usage():
   print '\n  Usage:\n\n' + sys.argv[0] + '\t\t\tLocate actual position using WiFi scanning\n' + sys.argv[0] + ' <MAC address>\tLocate given MAC address position\n' + sys.argv[0] + ' --help|-h\t\tThis help\n\n  Progress symbols:\n\n* new wifi AP detected\n. incomplete geographic data returned, retry\n+ complete geographic data returned\n- geographic data request failed, skipping address\n! connection error, retry'
 
@@ -98,8 +102,8 @@ jsons.sort(key=lambda j: j['location']['accuracy'], reverse=True)
 
 for j in jsons:
 
-  latitude=longitude=0.0
-  
+  latitude=longitude=0
+
   print ''
   
   if 'mac_address' in j:
@@ -151,3 +155,33 @@ for j in jsons:
 	
       print ''
       print '                  http://maps.google.it/maps?q=' + str(latitude) + ',' + str(longitude)
+
+
+
+weightedsumm=[0.0,0.0]
+summ=[0.0,0.0]
+summweight=0
+num=0
+
+for j in jsons:
+  
+  if 'location' in j:
+    
+    num=num+1
+    
+    if 'accuracy' in j['location']:
+      weight = j['location']['accuracy']
+      summweight = summweight + weight
+      
+    if 'latitude' in j['location']:
+      summ[0]=summ[0]+j['location']['latitude']
+      weightedsumm[0]=weightedsumm[0]+j['location']['latitude']*weight
+    
+    if 'longitude' in j['location']:
+      summ[1]=summ[1]+j['location']['longitude']
+      weightedsumm[1]=weightedsumm[1]+j['location']['longitude']*weight
+      
+    
+	
+print '\nAverage: http://maps.google.it/maps?q=' + str(summ[0]/num) + ',' + str(summ[1]/num)
+print '\nWeighted average: http://maps.google.it/maps?q=' + str(weightedsumm[0]/summweight) + ',' + str(weightedsumm[1]/summweight)
