@@ -19,10 +19,19 @@
     function update(text) {
 	json=eval("(" + text + ")");
 	
-	map.setCenter(new GLatLng(json['actual_position'][0],json['actual_position'][1]), 15); 
-	var actual_point = new GLatLng(json['actual_position'][0],json['actual_position'][1]);
-// 	map.addOverlay(new GMarker(actual_point));
+	if(json['actual_position']) { 
 
+	  var actual_pos = new GLatLng(json['actual_position'][0],json['actual_position'][1]);
+	  map.setCenter(actual_pos, 15); 
+
+	  var greenIcon = new GIcon(G_DEFAULT_ICON);
+	  greenIcon.image = "http://maps.google.com/mapfiles/marker_white.png";
+	  var markerOptions = { icon:greenIcon };
+	  var marker = new GMarker(actual_pos, markerOptions);
+
+	  map.addOverlay(marker);
+	}
+ 
 	if (json['mac_addresses']) {
 	  for (var addr in json['mac_addresses']) {
 	    
