@@ -246,17 +246,20 @@ def main():
       print '! Error running HTTP web server on port :8000, exiting.'
       sys.exit(0)
       
-    machandler=macHandler()
-    addr = machandler.getAddresses()
-    if len(addr)==0:
-      print '! No AP founded while scanning.'
-    
-    jsons = machandler.getLocation(addr)
-    if len(jsons)==0:
-      print '! No mapped WiFi MAC address founded in Google API database. Exiting.'
-      sys.exit(0)
-    
-    machandler.calcLocation(jsons)
+    while http_running:  
+      machandler=macHandler()
+      addr = machandler.getAddresses()
+      if len(addr)==0:
+	print '! No AP founded while scanning.'
+      
+      jsons = machandler.getLocation(addr)
+      if len(jsons)==0:
+	print '! No mapped WiFi MAC address founded in Google API database. Exiting.'
+      
+      machandler.calcLocation(jsons)
+      
+      time.sleep(10)
+      
 
   else:
       usage()
