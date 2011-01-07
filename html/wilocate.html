@@ -1,0 +1,79 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" 
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" 
+      xmlns:v="urn:schemas-microsoft-com:vml">
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
+    <title>Google Maps API Example: GGeoXml KML Overlay</title>
+
+<script src="http://maps.google.com/maps?file=api&amp;v=2&amp;sensor=true&amp;key=ABQIAAAAzsBziOvqIW08gaVXK_tkXxT2yXp_ZAY8_ufC3CFXhHIE1NvwkxSDf1yZe1iGzwY6DQtW78HcbBvPsQ" type="text/javascript"></script>
+
+<script type="text/javascript">
+
+   var jsondata={}
+
+    var map;
+    var geoXml; 
+    var toggleState = 1;
+
+    function update(text) {
+	json=eval("(" + text + ")");
+	
+	map.setCenter(new GLatLng(json['actual_position'][0],json['actual_position'][1]), 15); 
+	var actual_point = new GLatLng(json['actual_position'][0],json['actual_position'][1]);
+// 	map.addOverlay(new GMarker(actual_point));
+
+	if (json['mac_addresses']) {
+	  for (var addr in json['mac_addresses']) {
+	    
+	    coords= json['mac_addresses'][addr];
+	    var point = new GLatLng(coords[0],coords[1]);
+	    map.addOverlay(new GMarker(point));
+	  
+	  }
+	}
+
+    }
+
+    function initialize() {
+
+      var client = new XMLHttpRequest();
+      function handler() {
+
+	if(client.readyState == 4 && client.status == 200) {
+	  if(client.responseText != null) {
+	    update(client.responseText);
+	  }
+	  else {
+	    alert('Error getting json (null) ' + client.readyState + ' ' + client.status);
+	  }
+	} else if (client.readyState == 4 && client.status != 200) {
+	  alert('Error getting json (!=200)');
+	}
+      }
+      client.onreadystatechange = handler;
+      client.open("GET", "http://localhost:8000/wilocate.json", true);
+      client.send();   
+
+      if (GBrowserIsCompatible()) {
+      
+	map = new GMap2(document.getElementById("map_canvas")); 
+//         map.setCenter(new GLatLng(40.7165757,8.5699116), 11); 
+	map.setUIToDefault();
+//         map.addOverlay(geoXml);
+      }
+
+
+    } 
+
+
+	</script>
+  </head>
+
+  <body onload="initialize()">
+    <div id="map_canvas" style="width: 640px; height: 480px; float:left; border: 1px solid black;"></div>
+    <br clear="all"/>
+    <br/>
+    <input type="button" value="Toggle KML" onClick="toggleMyKml();"/>
+  </body>
+</html>
