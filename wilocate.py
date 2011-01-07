@@ -20,8 +20,8 @@ class httpRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
 	self.send_header('Content-type','application/x-javascript')
 	self.end_headers()
 	self.wfile.write(json.dumps(json_map))
-	
 	return
+	
       elif self.path=='/' or self.path.endswith(".html"):
 	f = open(os.curdir + os.sep + 'html' + os.sep + 'wilocate.html')
 	self.send_response(200)
@@ -92,7 +92,6 @@ class macHandler:
 	
 	sys.stdout.flush()
 	
-
 	params = "{ \"version\": \"1.1.0\", \"host\": \"maps.google.com\", \"request_address\": \"true\", \"address_language\":\"en_GB\", \"wifi_towers\": [ { \"mac_address\": " + a.replace(':','-') + ", \"signal_strength\": 8, \"age\": 0 } ] }"
 	headers = { "Pragma" : "no-cache", "Cache-control" : "no-cache" }
 	conn = httplib.HTTPConnection("www.google.com:80")
@@ -100,27 +99,33 @@ class macHandler:
 	  conn.request("POST", "/loc/json", params, headers)
 	  response = conn.getresponse()
 	except Exception, e:
-	  print '!', 
+	  print '!', e
 	  continue
 	
-	j = json.loads(response.read())
+	try:
+	  j = json.loads(response.read())
+	except ValueError, e:
+	  print '!', e
+	  continue
 	
-	if not ('location' in j and 'address' in j['location']):
+	if 'location' in j:
+	  j = j['location'].copy()
+	  if 'address' in j:
+	    print '+',
+	    j['mac_address']=a
+	    jsons.append(j)
+	    done=True
+	    break
+	else:
 	  print '.',
 	  continue
-	else:
-	  print '+',
-	  j['mac_address']=a
-	  jsons.append(j)
-	  done=True
-	  break
-      
+	
       if not done:
 	print '-',
 
     print ''
 
-    jsons.sort(key=lambda j: j['location']['accuracy'], reverse=True)
+    jsons.sort(key=lambda j: j['accuracy'], reverse=True)
     return jsons
 
 
@@ -131,6 +136,8 @@ class macHandler:
     summweight=0
     numlocated=0
 
+    json_block={}
+
     for j in jsons:
 
       latitude=0
@@ -139,49 +146,47 @@ class macHandler:
       print ''
       
       if 'mac_address' in j:
-	print j['mac_address'],
-
-      if 'location' in j:
-	
 	
 	numlocated=numlocated+1
 	
-	if 'accuracy' in j['location']:
-	  weight = j['location']['accuracy']
+	print j['mac_address'],
+	
+	if 'accuracy' in j:
+	  weight = j['accuracy']
 	  summweight = summweight + weight
 
-	  print '(accuracy: ' + str(j['location']['accuracy']) + ')', 
+	  print '(accuracy: ' + str(j['accuracy']) + ')', 
 	
-	if 'latitude' in j['location']:
-	    latitude = j['location']['latitude']
-	    summ[0]=summ[0]+j['location']['latitude']
-	    weightedsumm[0]=weightedsumm[0]+j['location']['latitude']*weight
+	if 'latitude' in j:
+	    latitude = j['latitude']
+	    summ[0]=summ[0]+j['latitude']
+	    weightedsumm[0]=weightedsumm[0]+j['latitude']*weight
 
 	
-	if 'longitude' in j['location']:
-	    longitude = j['location']['longitude']
-	    summ[1]=summ[1]+j['location']['longitude']
-	    weightedsumm[1]=weightedsumm[1]+j['location']['longitude']*weight
+	if 'longitude' in j:
+	    longitude = j['longitude']
+	    summ[1]=summ[1]+j['longitude']
+	    weightedsumm[1]=weightedsumm[1]+j['longitude']*weight
 	    
-	if 'address' in j['location']:
+	if 'address' in j:
 	  
-	  if 'country' in j['location']['address']:
-	    print j['location']['address']['country'],
+	  if 'country' in j['address']:
+	    print j['address']['country'],
 	    
-	  if 'country_code' in j['location']['address']:
-	    print '(' + j['location']['address']['country_code'] + ')',
+	  if 'country_code' in j['address']:
+	    print '(' + j['address']['country_code'] + ')',
 	    
-	  if 'region' in j['location']['address']:
-	    print j['location']['address']['region'],
+	  if 'region' in j['address']:
+	    print j['address']['region'],
 
-	  if 'postal_code' in j['location']['address']:
-	    print j['location']['address']['postal_code'],
+	  if 'postal_code' in j['address']:
+	    print j['address']['postal_code'],
 
-	  if 'county' in j['location']['address']:
-	    county = j['location']['address']['county']
+	  if 'county' in j['address']:
+	    county = j['address']['county']
 		  
-	  if 'city' in j['location']['address']:
-	    city = j['location']['address']['city']
+	  if 'city' in j['address']:
+	    city = j['address']['city']
 
 	  if county != city:
 	    print city, county,
@@ -191,26 +196,30 @@ class macHandler:
 	    print city, 
 
 
-	  if 'street' in j['location']['address']:
-	    print j['location']['address']['street'],
+	  if 'street' in j['address']:
+	    print j['address']['street'],
 
-	  if 'street_number' in j['location']['address']:
-	    print j['location']['address']['street_number'],
+	  if 'street_number' in j['address']:
+	    print j['address']['street_number'],
 	    
 	  #print '                  http://maps.google.it/maps?q=' + str(latitude) + ',' + str(longitude)
 
-	if 'mac_addresses' not in json_map:
-	  json_map['mac_addresses']={}
-	if j['mac_address'] not in json_map['mac_addresses']:
-	  json_map['mac_addresses'][j['mac_address']]=[ latitude, longitude ]
+	if 'APs' not in json_block:
+	  json_block['APs']={}
 	  
-	 
+	json_block['APs'][j['mac_address']]=j.copy()
+
+
+    timestamp = int(time.time())
     if numlocated>0 and weightedsumm>0:
-      print '\nActual position: http://maps.google.it/maps?q=' + str(summ[0]/numlocated) + ',' + str(summ[1]/numlocated)
+      print '\n' + str(timestamp) + ' position: http://maps.google.it/maps?q=' + str(summ[0]/numlocated) + ',' + str(summ[1]/numlocated)
       
-      if 'actual_position' not in json_map:
-	json_map['actual_position'] = [ summ[0]/numlocated, summ[1]/numlocated ]
-      
+      if 'position' not in json_block:
+	json_block['position'] = [ summ[0]/numlocated, summ[1]/numlocated ]
+
+    json_map[timestamp]=json_block
+    print json_map
+
       #print '\nWeighted average: http://maps.google.it/maps?q=' + str(weightedsumm[0]/summweight) + ',' + str(weightedsumm[1]/summweight)
 
      
