@@ -16,8 +16,6 @@ class httpRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
     try:
       if self.path.endswith(".json"):
 
-	
-	print json_map
 	self.send_response(200)
 	self.send_header('Content-type','application/x-javascript')
 	self.end_headers()
@@ -43,7 +41,7 @@ class httpHandler ( threading.Thread ):
    def run ( self ):
     
       
-      http_timeout = 30
+      http_timeout = 5
       socket.setdefaulttimeout(http_timeout)
 
       server_address = ('127.0.0.1', 8000)
@@ -199,7 +197,7 @@ class macHandler:
 	  if 'street_number' in j['location']['address']:
 	    print j['location']['address']['street_number'],
 	    
-	  print '                  http://maps.google.it/maps?q=' + str(latitude) + ',' + str(longitude)
+	  #print '                  http://maps.google.it/maps?q=' + str(latitude) + ',' + str(longitude)
 
 	if 'mac_addresses' not in json_map:
 	  json_map['mac_addresses']={}
@@ -208,17 +206,14 @@ class macHandler:
 	  
 	 
     if numlocated>0 and weightedsumm>0:
-      print '\nPoint: http://maps.google.it/maps?q=' + str(summ[0]/numlocated) + ',' + str(summ[1]/numlocated)
+      print '\nActual position: http://maps.google.it/maps?q=' + str(summ[0]/numlocated) + ',' + str(summ[1]/numlocated)
       
       if 'actual_position' not in json_map:
 	json_map['actual_position'] = [ summ[0]/numlocated, summ[1]/numlocated ]
       
-      print 'AAAAAAAAAA', str(len(json_map))
       #print '\nWeighted average: http://maps.google.it/maps?q=' + str(weightedsumm[0]/summweight) + ',' + str(weightedsumm[1]/summweight)
 
-    for j in jsons:
-      print str(j['location']['latitude']) + ',' + str(j['location']['longitude'])
-      
+     
 
   
 
@@ -258,7 +253,7 @@ def main():
       
       machandler.calcLocation(jsons)
       
-      time.sleep(10)
+      time.sleep(5)
       
 
   else:
