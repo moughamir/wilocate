@@ -38,6 +38,9 @@
 	map.fitBounds (bounds);
     }
 
+    //Tutti i limiti di distanza devono essere fatti in wilocate.py, senò actual_pos è falsato da loro 
+    //Anche se non vengono correttamente visualizzati
+
     function update(text) {
 	json=eval("(" + text + ")");
 
@@ -54,13 +57,13 @@
 		  if(!lastpos) {
 		      
 		      map.setCenter(actual_pos, 15); 
-		      var marker = new google.maps.LabeledMarker({
+		      var marker = new google.maps.Marker({
 			  position: actual_pos, 
 			  map: map, 
 			  icon: "http://maps.google.com/mapfiles/marker_white.png",
-			  title:"Actual position",
-			  labelText:"ASD?"
+			  title:"Actual position"
 		      });
+		      
 		     lastpos=marker;
 
 		  }
