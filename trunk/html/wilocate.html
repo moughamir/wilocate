@@ -10,47 +10,87 @@
 <script type="text/javascript"> 
     google.load("maps", "3",  {other_params:"sensor=false"});
 
-    var jsondata={}
+    var jsondata={};
+    var aplist={};
+    var poslist={};
+    var lastpos;
+    var lasttime=0;
+
 
     var map;
     var geoXml; 
     var toggleState = 1;
 
+    function distance(X,Y) {
+
+      var lat_diff=X.lat()-Y.lat();
+      var lng_diff=X.lng()-Y.lng();
+
+      return Math.sqrt(Math.pow(lat_diff,2)+Math.pow(lng_diff,2))
+
+    }
+
     function update(text) {
 	json=eval("(" + text + ")");
 
-	
 	for (b in json) { 
-	  
-	  if('position' in json[b]) {
-		var actual_pos = new google.maps.LatLng(json[b]['position'][0],json[b]['position'][1]);
-		map.setCenter(actual_pos, 15); 
 
-		var marker = new google.maps.Marker({
-		      position: actual_pos, 
-		      map: map, 
-		      icon: "http://maps.google.com/mapfiles/marker_white.png",
-		      title:"Actual position"
-		  });   
+	  if(b>lasttime) {
 
-	  }
-	  
-	  if('APs' in json[b])  {
+	    lasttime=b
+	    
+	    if('position' in json[b]) {
 
-	      for (m in json[b]['APs']) {
+		  var actual_pos = new google.maps.LatLng(json[b]['position'][0],json[b]['position'][1]);
+
+		  if(!lastpos) {
+		      var marker = new google.maps.Marker({
+			  position: actual_pos, 
+			  map: map, 
+			  icon: "http://maps.google.com/mapfiles/marker_white.png",
+			  title:"Actual position"
+		      });
+		     lastpos=marker;
+
+		  }
+		  else {
+
+		      dist = distance(actual_pos,lastpos.getPosition());
+		      // Tra 1.113 km e 111.3 m
+		      if(dist > 0.001 && dist < 0.01) {
+
+			map.setCenter(actual_pos, 15); 
+			lastpos.setPosition(actual_pos);
+
+			
+		      }
+		  }
+
+	    }
+	    
+	    if('APs' in json[b])  {
+
+		for (m in json[b]['APs']) {
+
+		  if(m in aplist) {
+		      
+		  }
+		  else {
+		      var pos = new google.maps.LatLng(json[b]['APs'][m]['latitude'],json[b]['APs'][m]['longitude']);
+
+		      var marker = new google.maps.Marker({
+			    position: pos, 
+			    map: map, 
+			    title:m
+			});   
+
+			aplist[m]=marker;
+		  }
 
 
-		var pos = new google.maps.LatLng(json[b]['APs'][m]['latitude'],json[b]['APs'][m]['longitude']);
-
-		var marker = new google.maps.Marker({
-		      position: pos, 
-		      map: map, 
-		      title:"AP"
-		  });   
-
+		  }
 		}
- 	      }
- 	  
+ 	  }
 	}
 
     }
