@@ -54,11 +54,12 @@
 		  if(!lastpos) {
 		      
 		      map.setCenter(actual_pos, 15); 
-		      var marker = new google.maps.Marker({
+		      var marker = new google.maps.LabeledMarker({
 			  position: actual_pos, 
 			  map: map, 
 			  icon: "http://maps.google.com/mapfiles/marker_white.png",
-			  title:"Actual position"
+			  title:"Actual position",
+			  labelText:"ASD?"
 		      });
 		     lastpos=marker;
 
