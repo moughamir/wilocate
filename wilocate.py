@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 
 from subprocess import Popen, PIPE, STDOUT
-import re, httplib, urllib, json, os, sys, time
+import re, httplib, urllib, json, os, sys, time, pprint
 import threading, SimpleHTTPServer, SocketServer, socket
 
 #sudo tcpdump -i mon0 -s 0 -e link[25] != 0x80
 #sudo aa-complain /usr/sbin/tcpdump
 
-json_map={}
+
+class data:
+  json_map={}
 
 http_running=True
 
@@ -19,7 +21,7 @@ class httpRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
 	self.send_response(200)
 	self.send_header('Content-type','application/x-javascript')
 	self.end_headers()
-	self.wfile.write(json.dumps(json_map))
+	self.wfile.write(json.dumps(data.json_map))
 	return
 	
       elif self.path=='/' or self.path.endswith(".html"):
@@ -217,14 +219,10 @@ class macHandler:
       if 'position' not in json_block:
 	json_block['position'] = [ summ[0]/numlocated, summ[1]/numlocated ]
 
-    json_map[timestamp]=json_block
-    print json_map
+    data.json_map[timestamp]=json_block
+    pprint.pprint(data.json_map)
 
       #print '\nWeighted average: http://maps.google.it/maps?q=' + str(weightedsumm[0]/summweight) + ',' + str(weightedsumm[1]/summweight)
-
-     
-
-  
 
 def main():
   
@@ -251,8 +249,8 @@ def main():
     jsons = machandler.getLocation(addr)
     if len(jsons)==0:
       print '! No mapped WiFi MAC address founded in Google API database.'
-    
-    machandler.calcLocation(jsons)
+    else:
+      machandler.calcLocation(jsons)
         
       
   elif len(sys.argv) == 1:
@@ -275,9 +273,9 @@ def main():
       
       jsons = machandler.getLocation(addr)
       if len(jsons)==0:
-	print '! No mapped WiFi MAC address founded in Google API database. Exiting.'
-      
-      machandler.calcLocation(jsons)
+	print '! No mapped WiFi MAC address founded in Google API database.'
+      else:
+	machandler.calcLocation(jsons)
       
       time.sleep(5)
       
@@ -295,7 +293,7 @@ if __name__ == "__main__":
     while True: 
       time.sleep(100)
   except (KeyboardInterrupt, SystemExit):
-    print '\n! Received keyboard interrupt, quitting threads.\n'
+    print '! Received keyboard interrupt, quitting threads.\n'
     http_running=False
       
 
