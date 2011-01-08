@@ -237,6 +237,23 @@ def main():
     elif not re.match("(?:[0-9A-Z][0-9A-Z](:|-)?){6}", sys.argv[1]):
       print '! Error: \'' + sys.argv[1] + '\' is not a MAC address with AA:BB:CC:DD:EE:FF format. Exiting.'
       sys.exit(1)
+  
+    try:
+      httpHandler().start()
+    except:
+      print '! Error running HTTP web server on port :8000, exiting.'
+      sys.exit(0)
+  
+    addr = [sys.argv[1]]  
+    
+    machandler=macHandler()
+    
+    jsons = machandler.getLocation(addr)
+    if len(jsons)==0:
+      print '! No mapped WiFi MAC address founded in Google API database.'
+    
+    machandler.calcLocation(jsons)
+        
       
   elif len(sys.argv) == 1:
     
