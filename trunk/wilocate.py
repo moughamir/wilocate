@@ -49,7 +49,7 @@ class httpHandler ( threading.Thread ):
       server_address = ('127.0.0.1', 8000)
       httpd = SocketServer.TCPServer(('', 8000), httpRequestHandler)
       sa = httpd.socket.getsockname()
-      print "Serving HTTP on", sa[0], "port", sa[1], "..."
+      print "+ Running HTTP server on", sa[0], "port", sa[1], "..."
       while http_running:
 	  httpd.handle_request()
       httpd.socket.close()
@@ -148,15 +148,18 @@ class macHandler:
       print ''
       
       if 'mac_address' in j:
-	
-	numlocated=numlocated+1
-	
-	print j['mac_address'],
-	
 	if 'accuracy' in j:
 	  weight = j['accuracy']
 	  summweight = summweight + weight
-
+	  
+	  # 22000 seems unreliable
+	  if weight>22000:
+	    continue
+	  
+	  numlocated=numlocated+1
+	  
+	  print j['mac_address'],
+	
 	  print '(accuracy: ' + str(j['accuracy']) + ')', 
 	
 	if 'latitude' in j:
@@ -293,7 +296,7 @@ if __name__ == "__main__":
     while True: 
       time.sleep(100)
   except (KeyboardInterrupt, SystemExit):
-    print '! Received keyboard interrupt, quitting threads.\n'
+    print '! Received keyboard interrupt, quitting in few seconds...\n'
     http_running=False
       
 

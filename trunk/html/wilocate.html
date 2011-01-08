@@ -16,7 +16,6 @@
     var lastpos;
     var lasttime=0;
 
-
     var map;
     var geoXml; 
     var toggleState = 1;
@@ -28,6 +27,15 @@
 
       return Math.sqrt(Math.pow(lat_diff,2)+Math.pow(lng_diff,2))
 
+    }
+
+    function autozoom() {
+
+	var bounds = new google.maps.LatLngBounds ();
+	for (a in aplist) {
+	  bounds.extend (aplist[a].getPosition());
+	}
+	map.fitBounds (bounds);
     }
 
     function update(text) {
@@ -44,6 +52,8 @@
 		  var actual_pos = new google.maps.LatLng(json[b]['position'][0],json[b]['position'][1]);
 
 		  if(!lastpos) {
+		      
+		      map.setCenter(actual_pos, 15); 
 		      var marker = new google.maps.Marker({
 			  position: actual_pos, 
 			  map: map, 
@@ -61,7 +71,6 @@
 
 			map.setCenter(actual_pos, 15); 
 			lastpos.setPosition(actual_pos);
-
 			
 		      }
 		  }
@@ -72,12 +81,14 @@
 
 		for (m in json[b]['APs']) {
 
+		  var pos = new google.maps.LatLng(json[b]['APs'][m]['latitude'],json[b]['APs'][m]['longitude']);
+
 		  if(m in aplist) {
 		      
 		  }
-		  else {
-		      var pos = new google.maps.LatLng(json[b]['APs'][m]['latitude'],json[b]['APs'][m]['longitude']);
-
+		  // < 111.3*3 m
+		  else if(distance(actual_pos,pos)<0.003) {
+		      
 		      var marker = new google.maps.Marker({
 			    position: pos, 
 			    map: map, 
@@ -90,6 +101,10 @@
 
 		  }
 		}
+
+ 	  autozoom();
+
+
  	  }
 	}
 
@@ -120,7 +135,7 @@
       var myOptions = {
 	zoom: 16,
 	center: myLatlng,
-	mapTypeId: google.maps.MapTypeId.ROADMAP
+	mapTypeId: google.maps.MapTypeId.HYBRID
       };
       map = new google.maps.Map(document.getElementById("map_canvas"),myOptions);
 
