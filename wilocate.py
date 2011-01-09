@@ -1,15 +1,128 @@
 #!/usr/bin/env python
 
 from subprocess import Popen, PIPE, STDOUT
-import re, httplib, urllib, json, os, sys, time, pprint
+import re, httplib, urllib, json, os, sys, time, pprint,math
 import threading, SimpleHTTPServer, SocketServer, socket
 
 #sudo tcpdump -i mon0 -s 0 -e link[25] != 0x80
-#sudo aa-complain /usr/sbin/tcpdump
+#sudo aa-complain /usr/sbin/tcpdump  
 
 
-class data:
+
+def variance(sequence):
+  med = sum(sequence) / len(sequence)
+  return sum([(x-med)**2 for x in sequence]) / len(sequence)
+
+def standard_deviation(sequence):
+  return math.sqrt(variance(sequence))
+
+
+class dataHandler:
   json_map={}
+  
+  def dataHandler(self):
+    pass
+  
+  def pprint(self,j):
+    
+    blockprint=''
+    
+    weight = j['accuracy']
+    latitude = j['latitude']	  
+    longitude = j['longitude']
+    
+    blockprint += '\n' + j['mac_address'] + ' (accuracy: ' + str(j['accuracy']) + ') ' 
+  
+    if 'address' in j:
+      if 'country' in j['address']:
+	blockprint += j['address']['country'] + ' ' 
+	
+      if 'country_code' in j['address']:
+	blockprint +=  '(' + j['address']['country_code'] + ') '
+	
+      if 'region' in j['address']:
+	blockprint +=  j['address']['region'] + ' '
+
+      if 'postal_code' in j['address']:
+	blockprint +=  j['address']['postal_code'] + ' '
+
+      if 'county' in j['address']:
+	county = j['address']['county'] + ' '
+	      
+      if 'city' in j['address']:
+	city = j['address']['city'] + ' '
+
+      if county != city:
+	blockprint +=  city + ' ' + county + ' '
+      elif not city:
+	blockprint +=  county + ' '
+      else:
+	blockprint +=  city + ' '
+
+
+      if 'street' in j['address']:
+	blockprint +=  j['address']['street'] + ' '
+
+      if 'street_number' in j['address']:
+	blockprint +=  j['address']['street_number'] + ' '
+	
+    print blockprint
+      
+    
+  
+  def insert(self,jsons):
+
+    blockprint=''
+
+    json_block={}
+
+    for j in jsons:
+
+      if 'mac_address' in j and 'accuracy' in j and 'latitude' in j and 'longitude' in j:
+	
+	self.pprint(j)
+      
+	if 'APs' not in json_block:
+	  json_block['APs']={}
+	  
+	json_block['reliable']=0  
+	json_block['APs'][j['mac_address']]=j.copy()
+
+
+    timestamp = int(time.time())  
+    tot_lat=[]
+    tot_lng=[]
+    for f in json_block['APs']:
+      tot_lat.append(json_block['APs'][f]['latitude'])
+      tot_lng.append(json_block['APs'][f]['longitude'])
+    
+    sd_lat=standard_deviation(tot_lat)
+    sd_lng=standard_deviation(tot_lng)
+    media_lat = sum(tot_lat) / len(tot_lat)
+    media_lng = sum(tot_lng) / len(tot_lng)
+    
+    sum_lat=0
+    sum_lng=0
+    summ_num=0
+    for f in json_block['APs']:
+      if json_block['APs'][f]['accuracy'] < 22000:  
+	if json_block['APs'][f]['latitude'] > media_lat-sd_lat and json_block['APs'][f]['latitude'] < media_lat+sd_lat:
+	  sum_lat+=json_block['APs'][f]['latitude']
+	  if json_block['APs'][f]['longitude'] > media_lng-sd_lng and json_block['APs'][f]['longitude'] < media_lng+sd_lng:
+	    sum_lng+=json_block['APs'][f]['longitude']
+	    summ_num+=1
+	    json_block['APs'][f]['reliable']=1
+      
+      
+    if summ_num>0 and sum_lat>0 and sum_lng>0:
+      print  '\nPosition (' + str(timestamp) + '): http://maps.google.it/maps?q=' + str(sum_lat/summ_num) + ',' + str(sum_lng/summ_num)
+      
+      json_block['position'] = [ sum_lat/summ_num, sum_lng/summ_num ]
+
+      self.json_map[timestamp]=json_block
+
+      pprint.pprint(self.json_map)
+
 
 http_running=True
 
@@ -130,102 +243,7 @@ class macHandler:
     jsons.sort(key=lambda j: j['accuracy'], reverse=True)
     return jsons
 
-
-  def calcLocation(self,jsons):
-
-    weightedsumm=[0.0,0.0]
-    summ=[0.0,0.0]
-    summweight=0
-    numlocated=0
-
-    json_block={}
-
-    for j in jsons:
-
-      latitude=0
-      longitude=0
-
-      print ''
-      
-      if 'mac_address' in j:
-	if 'accuracy' in j:
-	  weight = j['accuracy']
-	  summweight = summweight + weight
-	  
-	  # 22000 seems unreliable
-	  if weight>22000:
-	    continue
-	  
-	  numlocated=numlocated+1
-	  
-	  print j['mac_address'],
-	
-	  print '(accuracy: ' + str(j['accuracy']) + ')', 
-	
-	if 'latitude' in j:
-	    latitude = j['latitude']
-	    summ[0]=summ[0]+j['latitude']
-	    weightedsumm[0]=weightedsumm[0]+j['latitude']*weight
-
-	
-	if 'longitude' in j:
-	    longitude = j['longitude']
-	    summ[1]=summ[1]+j['longitude']
-	    weightedsumm[1]=weightedsumm[1]+j['longitude']*weight
-	    
-	if 'address' in j:
-	  
-	  if 'country' in j['address']:
-	    print j['address']['country'],
-	    
-	  if 'country_code' in j['address']:
-	    print '(' + j['address']['country_code'] + ')',
-	    
-	  if 'region' in j['address']:
-	    print j['address']['region'],
-
-	  if 'postal_code' in j['address']:
-	    print j['address']['postal_code'],
-
-	  if 'county' in j['address']:
-	    county = j['address']['county']
-		  
-	  if 'city' in j['address']:
-	    city = j['address']['city']
-
-	  if county != city:
-	    print city, county,
-	  elif not city:
-	    print county,
-	  else:
-	    print city, 
-
-
-	  if 'street' in j['address']:
-	    print j['address']['street'],
-
-	  if 'street_number' in j['address']:
-	    print j['address']['street_number'],
-	    
-	  #print '                  http://maps.google.it/maps?q=' + str(latitude) + ',' + str(longitude)
-
-	if 'APs' not in json_block:
-	  json_block['APs']={}
-	  
-	json_block['APs'][j['mac_address']]=j.copy()
-
-
-    timestamp = int(time.time())
-    if numlocated>0 and weightedsumm>0:
-      print '\n' + str(timestamp) + ' position: http://maps.google.it/maps?q=' + str(summ[0]/numlocated) + ',' + str(summ[1]/numlocated)
-      
-      if 'position' not in json_block:
-	json_block['position'] = [ summ[0]/numlocated, summ[1]/numlocated ]
-
-    data.json_map[timestamp]=json_block
-    pprint.pprint(data.json_map)
-
-      #print '\nWeighted average: http://maps.google.it/maps?q=' + str(weightedsumm[0]/summweight) + ',' + str(weightedsumm[1]/summweight)
+data = dataHandler()
 
 def main():
   
@@ -253,7 +271,7 @@ def main():
     if len(jsons)==0:
       print '! No mapped WiFi MAC address founded in Google API database.'
     else:
-      machandler.calcLocation(jsons)
+      data.insert(jsons)
         
       
   elif len(sys.argv) == 1:
@@ -278,7 +296,7 @@ def main():
       if len(jsons)==0:
 	print '! No mapped WiFi MAC address founded in Google API database.'
       else:
-	machandler.calcLocation(jsons)
+	data.insert(jsons)
       
       time.sleep(5)
       

@@ -91,7 +91,7 @@
 		      
 		  }
 		  // < 111.3*3 m
-		  else if(distance(actual_pos,pos)<0.003) {
+		  else if(json[b]['APs'][m]['reliable']==1) {
 		      
 		      var marker = new google.maps.Marker({
 			    position: pos, 
@@ -120,7 +120,7 @@
       function handler() {
 
 	if(client.readyState == 4 && client.status == 200) {
-	  if(client.responseText != null) {
+	  if(client.responseText != null && client.responseText != "") {
 	    update(client.responseText);
 	  }
 	  else {
