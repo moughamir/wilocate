@@ -25,13 +25,7 @@ class dataHandler:
   
   def pprint(self,j):
     
-    blockprint=''
-    
-    weight = j['accuracy']
-    latitude = j['latitude']	  
-    longitude = j['longitude']
-    
-    blockprint += '\n' + j['mac_address'] + ' (accuracy: ' + str(j['accuracy']) + ') ' 
+    blockprint = '\n' + j['mac_address'] + '(' + str(j['latitude']) + ',' + str(j['longitude']) + ')' 
   
     if 'address' in j:
       if 'country' in j['address']:
@@ -59,13 +53,15 @@ class dataHandler:
       else:
 	blockprint +=  city + ' '
 
-
       if 'street' in j['address']:
 	blockprint +=  j['address']['street'] + ' '
 
       if 'street_number' in j['address']:
 	blockprint +=  j['address']['street_number'] + ' '
 	
+  
+      blockprint += '(' + str(j['accuracy']) + ') '
+       
     print blockprint
       
     
@@ -87,7 +83,6 @@ class dataHandler:
 	  
 	json_block['reliable']=0  
 	json_block['APs'][j['mac_address']]=j.copy()
-
 
     timestamp = int(time.time())  
     tot_lat=[]
@@ -259,12 +254,11 @@ def main():
   
     try:
       httpHandler().start()
-    except:
+    except Exception, e:
       print '! Error running HTTP web server on port :8000, exiting.'
       sys.exit(0)
   
     addr = [sys.argv[1]]  
-    
     machandler=macHandler()
     
     jsons = machandler.getLocation(addr)
@@ -282,7 +276,7 @@ def main():
     
     try:
       httpHandler().start()
-    except:
+    except Exception, e:
       print '! Error running HTTP web server on port :8000, exiting.'
       sys.exit(0)
       

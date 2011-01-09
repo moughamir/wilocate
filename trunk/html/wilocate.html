@@ -38,6 +38,69 @@
 	map.fitBounds (bounds);
     }
 
+    function htmlify(j) {
+
+	var blockprint = j['mac_address'] + '<br/>';
+
+	if('address' in j) {
+	  if ('country' in j['address'])
+	    blockprint += j['address']['country'] + ' '; 
+	    
+	  if ('country_code' in j['address'])
+	    blockprint +=  '(' + j['address']['country_code'] + ') ';
+	    
+	  if('region' in j['address'])
+	    blockprint +=  j['address']['region'] + ' ';
+
+	  if('postal_code' in j['address'])
+	    blockprint +=  j['address']['postal_code'] + ' ';
+
+	  if('county' in j['address'])
+	    county = j['address']['county'] + ' ';
+		  
+	  if('city' in j['address'])
+	    city = j['address']['city'] + ' ';
+
+	  if (county != city)
+	    blockprint +=  city + ' ' + county + ' ';
+	  else if (!city)
+	    blockprint +=  county + ' ';
+	  else
+	    blockprint +=  city + ' ';
+
+	  if('street' in j['address'])
+	    blockprint +=  j['address']['street'] + ' ';
+
+	  if('street_number' in j['address'])
+	    blockprint +=  j['address']['street_number'] + ' ';
+	    
+	  }
+	blockprint += '(' + j['accuracy'] + ') ';
+	return blockprint
+    }
+
+    function updateMarker(a) {
+
+
+	var pos = new google.maps.LatLng(json[b]['APs'][m]['latitude'],json[b]['APs'][m]['longitude']);
+
+	var marker = new google.maps.Marker({
+	    position: pos, 
+	    map: map, 
+	    title:a['mac_address']
+	});   
+
+	aplist[m]=marker;
+
+	google.maps.event.addListener(marker, 'mouseover', function(event) {
+// 	    alert(marker.getTitle());
+	    document.getElementById('marker_info').innerHTML = htmlify(a);
+	});
+
+
+
+    }
+
     function update(text) {
 	json=eval("(" + text + ")");
 
@@ -47,6 +110,23 @@
 
 	    lasttime=b
 	    
+	    if('APs' in json[b])  {
+
+		for (m in json[b]['APs']) {
+
+		  if(m in aplist) {
+		      
+		  }
+		  else if(json[b]['APs'][m]['reliable']==1) {
+		  
+			updateMarker(json[b]['APs'][m]);
+    
+		  }
+
+
+		  }
+		}
+
 	    if('position' in json[b]) {
 
 		  var actual_pos = new google.maps.LatLng(json[b]['position'][0],json[b]['position'][1]);
@@ -71,37 +151,13 @@
 
 			map.setCenter(actual_pos, 15); 
 			lastpos.setPosition(actual_pos);
-			
+
 		      }
 		  }
-
 	    }
-	    
-	    if('APs' in json[b])  {
-
-		for (m in json[b]['APs']) {
-
-		  var pos = new google.maps.LatLng(json[b]['APs'][m]['latitude'],json[b]['APs'][m]['longitude']);
-
-		  if(m in aplist) {
-		      
-		  }
-		  else if(json[b]['APs'][m]['reliable']==1) {
-		      
-		      var marker = new google.maps.Marker({
-			    position: pos, 
-			    map: map, 
-			    title:m
-			});   
-
-			aplist[m]=marker;
-		  }
 
 
-		  }
-		}
-
-		autozoom();
+	    autozoom();
 
 
  	  }
@@ -155,8 +211,8 @@
 
   <body onload="initialize()">
     <div id="map_canvas" style="width: 640px; height: 480px; float:left; border: 1px solid black;"></div>
+    <div id="marker_info" style="width: 300px; height: 80px; float:right; border: 1px solid black;"></div>
     <br clear="all"/>
     <br/>
-    <input type="button" value="Toggle KML" onClick="toggleMyKml();"/>
   </body>
 </html>
