@@ -38,9 +38,6 @@
 	map.fitBounds (bounds);
     }
 
-    //Tutti i limiti di distanza devono essere fatti in wilocate.py, senò actual_pos è falsato da loro 
-    //Anche se non vengono correttamente visualizzati
-
     function update(text) {
 	json=eval("(" + text + ")");
 
@@ -68,10 +65,9 @@
 
 		  }
 		  else {
-
 		      dist = distance(actual_pos,lastpos.getPosition());
 		      // Tra 1.113 km e 111.3 m
-		      if(dist > 0.001 && dist < 0.01) {
+		      if(dist > 0.001) {
 
 			map.setCenter(actual_pos, 15); 
 			lastpos.setPosition(actual_pos);
@@ -90,7 +86,6 @@
 		  if(m in aplist) {
 		      
 		  }
-		  // < 111.3*3 m
 		  else if(json[b]['APs'][m]['reliable']==1) {
 		      
 		      var marker = new google.maps.Marker({
@@ -106,7 +101,7 @@
 		  }
 		}
 
- 	  autozoom();
+		autozoom();
 
 
  	  }
@@ -114,7 +109,9 @@
 
     }
 
-    function initialize() {
+    function request() {
+
+      setTimeout("request()",5000);
 
       var client = new XMLHttpRequest();
       function handler() {
@@ -130,10 +127,17 @@
 	  alert('Error getting json (!=200)');
 	}
       }
-       client.onreadystatechange = handler;
+
+      client.onreadystatechange = handler;
       client.open("GET", "http://localhost:8000/wilocate.json", true);
       client.send();   
 
+    }
+
+
+    function initialize() {
+
+      request()
 
       var myLatlng = new google.maps.LatLng(-34.397, 150.644);
       var myOptions = {
