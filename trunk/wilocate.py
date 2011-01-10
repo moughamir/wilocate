@@ -155,6 +155,16 @@ class httpRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
 	f.close()
 	return
 	
+      elif self.path.endswith(".png"):
+	f = open(os.curdir + os.sep + 'html' + self.path) 
+	
+	self.send_response(200)
+	self.send_header('Content-type','image/png')
+	self.end_headers()
+	self.wfile.write(f.read())
+	f.close()
+	return
+
     except IOError:
       self.send_error(404, 'File not found: %s' % self.path)
       
@@ -272,8 +282,6 @@ def main():
     print '! Error running HTTP thread , exiting.'
     http_running=False
     sys.exit(0)
-
-  #webbrowser.open('http://localhost:8000')
 
 
   single=False
