@@ -177,10 +177,12 @@
 	    update(client.responseText);
 	  }
 	  else {
-	    alert('Error getting json (null) ' + client.readyState + ' ' + client.status);
+	    toprint = 'Error getting json (null) ' + client.readyState + ' ' + client.status;
+	    document.getElementById('marker_info').innerHTML = toprint;
 	  }
 	} else if (client.readyState == 4 && client.status != 200) {
-	  alert('Error getting json (!=200)');
+	  toprint = 'Error getting json (!=200)';
+	  document.getElementById('marker_info').innerHTML = toprint;
 	}
       }
 

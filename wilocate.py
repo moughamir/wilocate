@@ -2,11 +2,13 @@
 
 from subprocess import Popen, PIPE, STDOUT
 import re, httplib, urllib, json, os, sys, time, pprint,math
-import threading, SimpleHTTPServer, SocketServer, socket
+import threading, SimpleHTTPServer, SocketServer, socket, webbrowser
 
 #sudo tcpdump -i mon0 -s 0 -e link[25] != 0x80
 #sudo aa-complain /usr/sbin/tcpdump  
 
+
+http_running=True
 
 
 def variance(sequence):
@@ -16,16 +18,29 @@ def variance(sequence):
 def standard_deviation(sequence):
   return math.sqrt(variance(sequence))
 
-
 class dataHandler:
   json_map={}
+  f=None
   
-  def dataHandler(self):
-    pass
-  
+  def __init__(self):
+    
+    dirr = 'log'
+    if not os.path.exists(dirr):
+      os.makedirs(dirr)
+    
+    fpath = 'log/' + time.strftime("%d-%b-%Y-%H:%M:%S", time.gmtime()) + '.log'
+    self.f = open(fpath,'w')
+    
   def pprint(self,j):
     
-    blockprint = '\n' + j['mac_address'] + '(' + str(j['latitude']) + ',' + str(j['longitude']) + ')' 
+    blockprint=''
+    
+    if 'reliable' in j:
+      blockprint += '+ ' 
+    else:
+      blockprint += '-' 
+    
+    blockprint = j['mac_address'] + ' (' + str(j['latitude']) + ',' + str(j['longitude']) + ') ' 
   
     if 'address' in j:
       if 'country' in j['address']:
@@ -72,6 +87,8 @@ class dataHandler:
 
     json_block={}
 
+    print '\n## Snapshot at ' + time.strftime("%d-%b-%Y-%H:%M:%S", time.gmtime()) + ':'
+    
     for j in jsons:
 
       if 'mac_address' in j and 'accuracy' in j and 'latitude' in j and 'longitude' in j:
@@ -110,16 +127,13 @@ class dataHandler:
       
       
     if summ_num>0 and sum_lat>0 and sum_lng>0:
-      print  '\nPosition (' + str(timestamp) + '): http://maps.google.it/maps?q=' + str(sum_lat/summ_num) + ',' + str(sum_lng/summ_num)
+      print  '+ Position: http://maps.google.it/maps?q=' + str(sum_lat/summ_num) + ',' + str(sum_lng/summ_num)
       
       json_block['position'] = [ sum_lat/summ_num, sum_lng/summ_num ]
 
       self.json_map[timestamp]=json_block
 
-      pprint.pprint(self.json_map)
-
-
-http_running=True
+      self.f.write(pprint.pformat(json_block))
 
 class httpRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
   def do_GET(self):
@@ -148,19 +162,27 @@ class httpRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
 
 class httpHandler ( threading.Thread ):
   
+   global http_running
+  
    def run ( self ):
     
+      global http_running
       
       http_timeout = 5
       socket.setdefaulttimeout(http_timeout)
 
       server_address = ('127.0.0.1', 8000)
-      httpd = SocketServer.TCPServer(('', 8000), httpRequestHandler)
-      sa = httpd.socket.getsockname()
-      print "+ Running HTTP server on", sa[0], "port", sa[1], "..."
-      while http_running:
-	  httpd.handle_request()
-      httpd.socket.close()
+      try:
+	httpd = SocketServer.TCPServer(('', 8000), httpRequestHandler)
+      except Exception, e:
+	print '! Error opening HTTP server.', e
+	http_running=False
+      else:
+	sa = httpd.socket.getsockname()
+	print "+ Running HTTP server on", sa[0], "port", sa[1], "..."
+	while http_running:
+	    httpd.handle_request()
+	httpd.socket.close()
 	
 
 def usage():
@@ -168,7 +190,7 @@ def usage():
 
 class macHandler:
   
-  def macHandler(self):
+  def __init__(self):
     pass
 
   def getAddresses(self):
@@ -242,6 +264,19 @@ data = dataHandler()
 
 def main():
   
+  global http_running
+  
+  try:
+    httpHandler().start()
+  except Exception, e:
+    print '! Error running HTTP thread , exiting.'
+    http_running=False
+    sys.exit(0)
+
+  #webbrowser.open('http://localhost:8000')
+
+
+  single=False
   if len(sys.argv) == 2:
     
     if(sys.argv[1]=='--help' or sys.argv[1]=='-h'):
@@ -252,48 +287,39 @@ def main():
       print '! Error: \'' + sys.argv[1] + '\' is not a MAC address with AA:BB:CC:DD:EE:FF format. Exiting.'
       sys.exit(1)
   
-    try:
-      httpHandler().start()
-    except Exception, e:
-      print '! Error running HTTP web server on port :8000, exiting.'
-      sys.exit(0)
-  
-    addr = [sys.argv[1]]  
-    machandler=macHandler()
-    
-    jsons = machandler.getLocation(addr)
-    if len(jsons)==0:
-      print '! No mapped WiFi MAC address founded in Google API database.'
-    else:
-      data.insert(jsons)
-        
+    single=True
       
   elif len(sys.argv) == 1:
     
     if os.getuid() != 0:
       
       print '+ Warning: triggered scan needs root privileges. Restart with \'sudo ' + sys.argv[0] + '\' to get more results.'
+
+
+  webbrowser.open('http://localhost:8000')
+
+
+  while http_running:  
+    machandler=macHandler()
     
-    try:
-      httpHandler().start()
-    except Exception, e:
-      print '! Error running HTTP web server on port :8000, exiting.'
-      sys.exit(0)
-      
-    while http_running:  
-      machandler=macHandler()
+    if single is True:
+      addr = [sys.argv[1]]  
+    else:
       addr = machandler.getAddresses()
       if len(addr)==0:
 	print '! No AP founded while scanning.'
-      
-      jsons = machandler.getLocation(addr)
-      if len(jsons)==0:
-	print '! No mapped WiFi MAC address founded in Google API database.'
-      else:
-	data.insert(jsons)
-      
+    
+    jsons = machandler.getLocation(addr)
+    if len(jsons)==0:
+      print '! No  MAC address founded in Google API database.'
+    else:
+      data.insert(jsons)
+  
+    if single is not True:
       time.sleep(5)
-      
+    else:
+      break
+
 
   else:
       usage()
@@ -305,10 +331,12 @@ if __name__ == "__main__":
   
   try:
     main()
-    while True: 
-      time.sleep(100)
+    while http_running: 
+      time.sleep(1000)
   except (KeyboardInterrupt, SystemExit):
+    http_running = False
     print '! Received keyboard interrupt, quitting in few seconds...\n'
-    http_running=False
+    if not data.f.closed:
+      data.f.close()
       
 
