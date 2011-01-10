@@ -40,7 +40,7 @@
 
     function htmlify(j) {
 
-	var blockprint = j['mac_address'] + '<br/>';
+	var blockprint = j['mac_address'] + '\n';
 
 	if('address' in j) {
 	  if ('country' in j['address'])
@@ -87,7 +87,9 @@
 	var marker = new google.maps.Marker({
 	    position: pos, 
 	    map: map, 
-	    title:a['mac_address']
+	    title:a['mac_address'],
+	    icon:'ap.png',
+	    title:htmlify(a)
 	});   
 
 	aplist[m]=marker;
@@ -137,7 +139,6 @@
 		      var marker = new google.maps.Marker({
 			  position: actual_pos, 
 			  map: map, 
-			  icon: "http://maps.google.com/mapfiles/marker_white.png",
 			  title:"Actual position"
 		      });
 		      
