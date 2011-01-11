@@ -1,17 +1,15 @@
 #!/usr/bin/env python
 
 from subprocess import Popen, PIPE, STDOUT
-import re, httplib, urllib, json, os, sys, time, pprint,math
+import re, httplib, urllib, json, os, sys, time, pprint,math, stat
 import threading, SimpleHTTPServer, SocketServer, socket, webbrowser
 
 #sudo tcpdump -i mon0 -s 0 -e link[25] != 0x80
 #sudo aa-complain /usr/sbin/tcpdump  
 
-# Aggiungere chiusura in uscita di socket e file
-
+# sincronizzare data.json_map
 
 http_running=False
-
 
 def variance(sequence):
   med = sum(sequence) / len(sequence)
@@ -22,20 +20,31 @@ def standard_deviation(sequence):
 
 def exit(r=0):
   http_running = False
+  
+  if not data.f.closed:
+    data.f.close()
+    
+  if data.lock.locked():
+    data.lock.release()
+  
   sys.exit(r)
 
 class dataHandler:
   json_map={}
   f=None
+  lock=None
   
   def __init__(self):
     
     dirr = 'log'
     if not os.path.exists(dirr):
       os.makedirs(dirr)
+      os.chmod(dirr,stat.S_IWOTH)
     
     fpath = 'log/' + time.strftime("%d-%b-%Y-%H:%M:%S", time.gmtime()) + '.log'
     self.f = open(fpath,'w')
+    
+    self.lock = threading.Lock()
     
   def pprint(self,j):
     
@@ -46,7 +55,7 @@ class dataHandler:
     else:
       blockprint += '-' 
     
-    blockprint = j['mac_address'] + ' (' + str(j['latitude']) + ',' + str(j['longitude']) + ') ' 
+    blockprint = j['mac_address'] + ' ' + j['essid'] + ' (' + str(j['latitude']) + ',' + str(j['longitude']) + ') ' 
   
     if 'address' in j:
       if 'country' in j['address']:
@@ -85,6 +94,12 @@ class dataHandler:
        
     print blockprint
       
+
+  def extract(self):
+    self.lock.acquire()
+    toret = json_map.copy()
+    self.lock.release()
+    return toret
     
   
   def insert(self,jsons):
@@ -124,22 +139,24 @@ class dataHandler:
     summ_num=0
     for f in json_block['APs']:
       if json_block['APs'][f]['accuracy'] < 22000:  
-	if json_block['APs'][f]['latitude'] > media_lat-sd_lat and json_block['APs'][f]['latitude'] < media_lat+sd_lat:
+	if json_block['APs'][f]['latitude'] >= media_lat-sd_lat and json_block['APs'][f]['latitude'] <= media_lat+sd_lat:
 	  sum_lat+=json_block['APs'][f]['latitude']
-	  if json_block['APs'][f]['longitude'] > media_lng-sd_lng and json_block['APs'][f]['longitude'] < media_lng+sd_lng:
+	  if json_block['APs'][f]['longitude'] >= media_lng-sd_lng and json_block['APs'][f]['longitude'] <= media_lng+sd_lng:
 	    sum_lng+=json_block['APs'][f]['longitude']
 	    summ_num+=1
 	    json_block['APs'][f]['reliable']=1
-      
       
     if summ_num>0 and sum_lat>0 and sum_lng>0:
       print  '+ Position: http://maps.google.it/maps?q=' + str(sum_lat/summ_num) + ',' + str(sum_lng/summ_num)
       
       json_block['position'] = [ sum_lat/summ_num, sum_lng/summ_num ]
 
+      self.lock.acquire()
       self.json_map[timestamp]=json_block
+      self.lock.release()
 
       self.f.write(pprint.pformat(json_block))
+      self.f.flush()
 
 class httpRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
   def do_GET(self):
@@ -213,28 +230,15 @@ class macHandler:
 
   def getAddresses(self):
     
-    addr=[]
+    newaddr=[]
     
-    for i in range(3):
-      newaddr=[]
-      
-      cmd = 'iwlist scan'
-      p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
-      
-      newaddr = re.findall('Address: ((?:[0-9A-Z][0-9A-Z]:?){6})', p.stdout.read())
-      
-      #foundlist = re.findall('Address: ((?:[0-9A-Z][0-9A-Z]:?){6})[\s\S]*ESSID:"(.*)"', p.stdout.read())
-      
-      #for f in foundlist:
-	#newaddr = foundlist[f][0]
-      
-      
-      if len(set(addr + newaddr)) > len(addr):
-	print '* '*(len(set(addr + newaddr))-len(addr)),
-      
-      addr = list(set(addr + newaddr))
-      
-      return addr
+    cmd = 'iwlist scan'
+    p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
+    
+    newaddr = re.findall('Address: ((?:[0-9A-Z][0-9A-Z]:?){6})[\s\S]*ESSID:"(.*)"', p.stdout.read())
+    
+    print '* '*(len(newaddr)),
+    return newaddr
 
 
   def getLocation(self,addr):
@@ -244,12 +248,12 @@ class macHandler:
     for a in addr:
 
       done=False
-
+      
       for r in range(3):
 	
 	sys.stdout.flush()
 	
-	params = "{ \"version\": \"1.1.0\", \"host\": \"maps.google.com\", \"request_address\": \"true\", \"address_language\":\"en_GB\", \"wifi_towers\": [ { \"mac_address\": " + a.replace(':','-') + ", \"signal_strength\": 8, \"age\": 0 } ] }"
+	params = "{ \"version\": \"1.1.0\", \"host\": \"maps.google.com\", \"request_address\": \"true\", \"address_language\":\"en_GB\", \"wifi_towers\": [ { \"mac_address\": " + a[0].replace(':','-') + ", \"signal_strength\": 8, \"age\": 0 } ] }"
 	headers = { "Pragma" : "no-cache", "Cache-control" : "no-cache" }
 	conn = httplib.HTTPConnection("www.google.com:80")
 	try:
@@ -269,8 +273,12 @@ class macHandler:
 	  j = j['location'].copy()
 	  if 'address' in j:
 	    print '+',
-	    j['mac_address']=a
+	    
+	    j['mac_address']=a[0]
+	    j['essid']=a[1]
+	    
 	    jsons.append(j)
+	    
 	    done=True
 	    break
 	else:
@@ -281,11 +289,10 @@ class macHandler:
 	print '-',
 
     print ''
-
-    jsons.sort(key=lambda j: j['accuracy'], reverse=True)
     return jsons
 
 data = dataHandler()
+machandler=macHandler()
 
 def main():
   
@@ -325,7 +332,6 @@ def main():
   webbrowser.open('http://localhost:8000')
 
   while http_running:  
-    machandler=macHandler()
     
     if single is True:
       addr = [sys.argv[1]]  
