@@ -11,12 +11,12 @@ import threading, SimpleHTTPServer, SocketServer, socket, webbrowser
 
 http_running=False
 
-def variance(sequence):
-  med = sum(sequence) / len(sequence)
-  return sum([(x-med)**2 for x in sequence]) / len(sequence)
 
 def standard_deviation(sequence):
-  return math.sqrt(variance(sequence))
+  med = sum(sequence) / len(sequence)
+  variance = sum([(x-med)**2 for x in sequence]) / len(sequence)
+  return math.sqrt(variance)
+    
 
 def exit(r=0):
   http_running = False
@@ -53,9 +53,9 @@ class dataHandler:
     if 'reliable' in j:
       blockprint += '+ ' 
     else:
-      blockprint += '-' 
+      blockprint += '- ' 
     
-    blockprint = j['mac_address'] + ' ' + j['essid'] + ' (' + str(j['latitude']) + ',' + str(j['longitude']) + ') ' 
+    blockprint += j['mac_address'] + ' ' + j['essid'] + ' (' + str(j['latitude']) + ',' + str(j['longitude']) + ') ' 
   
     if 'address' in j:
       if 'country' in j['address']:
@@ -114,8 +114,6 @@ class dataHandler:
 
       if 'mac_address' in j and 'accuracy' in j and 'latitude' in j and 'longitude' in j:
 	
-	self.pprint(j)
-      
 	if 'APs' not in json_block:
 	  json_block['APs']={}
 	  
@@ -129,8 +127,8 @@ class dataHandler:
       tot_lat.append(json_block['APs'][f]['latitude'])
       tot_lng.append(json_block['APs'][f]['longitude'])
     
-    sd_lat=standard_deviation(tot_lat)
-    sd_lng=standard_deviation(tot_lng)
+    sd_lat=standard_deviation(tot_lat)*1.1
+    sd_lng=standard_deviation(tot_lng)*1.1
     media_lat = sum(tot_lat) / len(tot_lat)
     media_lng = sum(tot_lng) / len(tot_lng)
     
@@ -145,7 +143,10 @@ class dataHandler:
 	    sum_lng+=json_block['APs'][f]['longitude']
 	    summ_num+=1
 	    json_block['APs'][f]['reliable']=1
-      
+    
+    for f in json_block['APs']:
+      self.pprint(json_block['APs'][f])
+    
     if summ_num>0 and sum_lat>0 and sum_lng>0:
       print  '+ Position: http://maps.google.it/maps?q=' + str(sum_lat/summ_num) + ',' + str(sum_lng/summ_num)
       
@@ -235,7 +236,7 @@ class macHandler:
     cmd = 'iwlist scan'
     p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
     
-    newaddr = re.findall('Address: ((?:[0-9A-Z][0-9A-Z]:?){6})[\s\S]*ESSID:"(.*)"', p.stdout.read())
+    newaddr = re.findall('Address: ((?:[0-9A-Z][0-9A-Z]:?){6})[\s\S]*?ESSID:"(.*)"', p.stdout.read())
     
     print '* '*(len(newaddr)),
     return newaddr
@@ -260,13 +261,13 @@ class macHandler:
 	  conn.request("POST", "/loc/json", params, headers)
 	  response = conn.getresponse()
 	except Exception, e:
-	  print '!', e
+	  print '! Error querying Google:', e
 	  continue
 	
 	try:
 	  j = json.loads(response.read())
 	except ValueError, e:
-	  print '!', e
+	  print '! Error decoding JSON:', e
 	  continue
 	
 	if 'location' in j:
@@ -359,12 +360,8 @@ if __name__ == "__main__":
   
   try:
     main()
-    #while http_running: 
-      #time.sleep(1000)
   except (KeyboardInterrupt, SystemExit):
     http_running = False
     print '! Quitting in few seconds...\n'
-    if not data.f.closed:
-      data.f.close()
-      
+    exit(0)  
 

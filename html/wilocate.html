@@ -10,6 +10,8 @@
 <script type="text/javascript"> 
     google.load("maps", "3",  {other_params:"sensor=false"});
 
+    //risolvere che zooma sempre
+
     var jsondata={};
     var aplist={};
     var poslist={};
@@ -31,16 +33,26 @@
 
     function autozoom() {
 
+	var toZoom=false;
 	var bounds = new google.maps.LatLngBounds ();
 	for (a in aplist) {
-	  bounds.extend (aplist[a].getPosition());
+	  if(!bounds.contains(aplist[a].getPosition())) {
+	    bounds.extend (aplist[a].getPosition());
+	    toZoom=true;
+
+	  }
 	}
-	map.fitBounds (bounds);
+
+
+	if(toZoom) {
+// 	  document.getElementById('marker_info').innerHTML = "ZOOOMO"
+	  map.fitBounds (bounds);
+	}
     }
 
     function htmlify(j) {
 
-	var blockprint = '<h3>' + j['essid'] + '<h3/><br/>' + j['mac_address'] + '<br/>';
+	var blockprint = '<h3>' + j['essid'] + '<h3/>' + j['mac_address'] + '<br/>';
 
 	if('address' in j) {
 	  if ('country' in j['address'])
@@ -104,62 +116,63 @@
 
     function update(text) {
 	json=eval("(" + text + ")");
+	if(json) {
+	  document.getElementById('marker_info').innerHTML = "APs datas loaded.";
 
-	for (b in json) { 
+	  for (b in json) { 
 
-	  if(b>lasttime) {
+	    if(b>lasttime) {
 
-	    lasttime=b
+	      lasttime=b
+	      
+	      if('APs' in json[b])  {
+
+		  for (m in json[b]['APs']) {
+
+		    if(m in aplist) {
+			
+		    }
+		    else if(json[b]['APs'][m]['reliable']==1) {
+		    
+			  updateMarker(json[b]['APs'][m]);
+      
+		    }
+
+
+		    }
+		  }
+
+	      if('position' in json[b]) {
+
+		    var actual_pos = new google.maps.LatLng(json[b]['position'][0],json[b]['position'][1]);
+
+		    if(!lastpos) {
+			
+// 			map.setCenter(actual_pos, 15); 
+			var marker = new google.maps.Marker({
+			    position: actual_pos, 
+			    map: map, 
+			    title:"Actual position"
+			});
+			
+		      lastpos=marker;
+
+		    }
+		    else {
+			dist = distance(actual_pos,lastpos.getPosition());
+			// Tra 1.113 km e 111.3 m
+			if(dist > 0.001) {
+
+// 			  map.setCenter(actual_pos, 15); 
+			  lastpos.setPosition(actual_pos);
+
+			}
+		    }
+	      }
+
+	      autozoom();
 	    
-	    if('APs' in json[b])  {
-
-		for (m in json[b]['APs']) {
-
-		  if(m in aplist) {
-		      
-		  }
-		  else if(json[b]['APs'][m]['reliable']==1) {
-		  
-			updateMarker(json[b]['APs'][m]);
-    
-		  }
-
-
-		  }
-		}
-
-	    if('position' in json[b]) {
-
-		  var actual_pos = new google.maps.LatLng(json[b]['position'][0],json[b]['position'][1]);
-
-		  if(!lastpos) {
-		      
-		      map.setCenter(actual_pos, 15); 
-		      var marker = new google.maps.Marker({
-			  position: actual_pos, 
-			  map: map, 
-			  title:"Actual position"
-		      });
-		      
-		     lastpos=marker;
-
-		  }
-		  else {
-		      dist = distance(actual_pos,lastpos.getPosition());
-		      // Tra 1.113 km e 111.3 m
-		      if(dist > 0.001) {
-
-			map.setCenter(actual_pos, 15); 
-			lastpos.setPosition(actual_pos);
-
-		      }
-		  }
 	    }
-
-
-	    autozoom();
-	   
-
 
  	  }
 	}
@@ -176,7 +189,6 @@
 	if(client.readyState == 4 && client.status == 200) {
 	  if(client.responseText != null && client.responseText != "") {
 	    update(client.responseText);
-	    document.getElementById('marker_info').innerHTML = "APs datas loaded.";
 
 	  }
 	  else {
