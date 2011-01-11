@@ -40,7 +40,7 @@
 
     function htmlify(j) {
 
-	var blockprint = j['mac_address'] + '\n';
+	var blockprint = '<h3>' + j['essid'] + '<h3/><br/>' + j['mac_address'] + '<br/>';
 
 	if('address' in j) {
 	  if ('country' in j['address'])
@@ -87,9 +87,8 @@
 	var marker = new google.maps.Marker({
 	    position: pos, 
 	    map: map, 
-	    title:a['mac_address'],
-	    icon:'ap.png',
-	    title:htmlify(a)
+	    title:a['essid'] + '\n' + a['mac_address'],
+	    icon:'ap.png'
 	});   
 
 	aplist[m]=marker;
@@ -159,6 +158,7 @@
 
 
 	    autozoom();
+	   
 
 
  	  }
@@ -176,6 +176,8 @@
 	if(client.readyState == 4 && client.status == 200) {
 	  if(client.responseText != null && client.responseText != "") {
 	    update(client.responseText);
+	    document.getElementById('marker_info').innerHTML = "APs datas loaded.";
+
 	  }
 	  else {
 	    toprint = 'Error getting json (null) ' + client.readyState + ' ' + client.status;
@@ -201,7 +203,7 @@
       var myLatlng = new google.maps.LatLng(-34.397, 150.644);
       var myOptions = {
 	zoom: 16,
-	center: myLatlng,
+// 	center: myLatlng,
 	mapTypeId: google.maps.MapTypeId.HYBRID
       };
       map = new google.maps.Map(document.getElementById("map_canvas"),myOptions);
@@ -214,7 +216,7 @@
 
   <body onload="initialize()">
     <div id="map_canvas" style="width: 640px; height: 480px; float:left; border: 1px solid black;"></div>
-    <div id="marker_info" style="width: 300px; height: 80px; float:right; border: 1px solid black;"></div>
+    <div id="marker_info" style="width: 300px; height: 80px; float:right; border: 1px solid black;">Loading APs positions...</div>
     <br clear="all"/>
     <br/>
   </body>
