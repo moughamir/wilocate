@@ -7,8 +7,10 @@ import threading, SimpleHTTPServer, SocketServer, socket, webbrowser
 #sudo tcpdump -i mon0 -s 0 -e link[25] != 0x80
 #sudo aa-complain /usr/sbin/tcpdump  
 
+# Aggiungere chiusura in uscita di socket e file
 
-http_running=True
+
+http_running=False
 
 
 def variance(sequence):
@@ -17,6 +19,10 @@ def variance(sequence):
 
 def standard_deviation(sequence):
   return math.sqrt(variance(sequence))
+
+def exit(r=0):
+  http_running = False
+  sys.exit(r)
 
 class dataHandler:
   json_map={}
@@ -173,11 +179,12 @@ class httpRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
 class httpHandler ( threading.Thread ):
   
    global http_running
+   httpd = None
   
    def run ( self ):
     
       global http_running
-      
+
       http_timeout = 5
       socket.setdefaulttimeout(http_timeout)
 
@@ -188,6 +195,7 @@ class httpHandler ( threading.Thread ):
 	print '! Error opening HTTP server.', e
 	http_running=False
       else:
+	http_running=True
 	sa = httpd.socket.getsockname()
 	print "+ Running HTTP server on", sa[0], "port", sa[1], "..."
 	while http_running:
@@ -212,7 +220,14 @@ class macHandler:
       
       cmd = 'iwlist scan'
       p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
+      
       newaddr = re.findall('Address: ((?:[0-9A-Z][0-9A-Z]:?){6})', p.stdout.read())
+      
+      #foundlist = re.findall('Address: ((?:[0-9A-Z][0-9A-Z]:?){6})[\s\S]*ESSID:"(.*)"', p.stdout.read())
+      
+      #for f in foundlist:
+	#newaddr = foundlist[f][0]
+      
       
       if len(set(addr + newaddr)) > len(addr):
 	print '* '*(len(set(addr + newaddr))-len(addr)),
@@ -281,7 +296,7 @@ def main():
   except Exception, e:
     print '! Error running HTTP thread , exiting.'
     http_running=False
-    sys.exit(0)
+    exit(0)
 
 
   single=False
@@ -289,11 +304,11 @@ def main():
     
     if(sys.argv[1]=='--help' or sys.argv[1]=='-h'):
       usage()
-      sys.exit(0)
+      exit(0)
     
     elif not re.match("(?:[0-9A-Z][0-9A-Z](:|-)?){6}", sys.argv[1]):
       print '! Error: \'' + sys.argv[1] + '\' is not a MAC address with AA:BB:CC:DD:EE:FF format. Exiting.'
-      sys.exit(1)
+      exit(1)
   
     single=True
       
@@ -303,9 +318,11 @@ def main():
       
       print '+ Warning: triggered scan needs root privileges. Restart with \'sudo ' + sys.argv[0] + '\' to get more results.'
 
+  else:
+      usage()
+      exit(0)
 
   webbrowser.open('http://localhost:8000')
-
 
   while http_running:  
     machandler=macHandler()
@@ -329,9 +346,6 @@ def main():
       break
 
 
-  else:
-      usage()
-
 
 if __name__ == "__main__":
 
@@ -339,11 +353,11 @@ if __name__ == "__main__":
   
   try:
     main()
-    while http_running: 
-      time.sleep(1000)
+    #while http_running: 
+      #time.sleep(1000)
   except (KeyboardInterrupt, SystemExit):
     http_running = False
-    print '! Received keyboard interrupt, quitting in few seconds...\n'
+    print '! Quitting in few seconds...\n'
     if not data.f.closed:
       data.f.close()
       
