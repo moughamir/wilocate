@@ -39,8 +39,12 @@ class dataHandler:
     dirr = 'log'
     if not os.path.exists(dirr):
       os.makedirs(dirr)
-      os.chmod(dirr,stat.S_IWOTH)
-    
+      
+    if os.getenv("SUDO_UID") and os.getenv("SUDO_GID"):
+      os.chown(dirr,int(os.getenv("SUDO_UID")),int(os.getenv("SUDO_GID")))
+    else:
+      os.chmod(dirr,0777)
+   
     fpath = 'log/' + time.strftime("%d-%b-%Y-%H:%M:%S", time.gmtime()) + '.log'
     self.f = open(fpath,'w')
     
