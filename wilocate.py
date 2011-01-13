@@ -62,7 +62,7 @@ class dataHandler:
       
     self.lock = threading.Lock()
     
-  def pprint(self,j):
+  def pprint(self,j,m):
     
     blockprint=''
     
@@ -71,7 +71,7 @@ class dataHandler:
     else:
       blockprint += '- ' 
     
-    blockprint += j['mac_address'] + ' ' + j['essid'] + ' (' + str(j['latitude']) + ',' + str(j['longitude']) + ') ' 
+    blockprint += m + ' ' + j['essid'] + ' (' + str(j['latitude']) + ',' + str(j['longitude']) + ') ' 
   
     if 'address' in j:
       if 'country' in j['address']:
@@ -126,19 +126,23 @@ class dataHandler:
 
     print '\n## Snapshot at ' + time.strftime("%d-%b-%Y-%H:%M:%S", time.gmtime()) + ':'
     
-    for j in jsons:
+    for a in jsons:
 
-      if 'mac_address' in j and 'accuracy' in j and 'latitude' in j and 'longitude' in j:
+      j= jsons[a]
+      
+      if 'accuracy' in j and 'latitude' in j and 'longitude' in j:
 	
 	if 'APs' not in json_block:
 	  json_block['APs']={}
 	  
 	json_block['reliable']=0  
-	json_block['APs'][j['mac_address']]=j.copy()
+	json_block['APs'][a]=j.copy()
 
     timestamp = int(time.time())  
     tot_lat=[]
     tot_lng=[]
+    
+    
     for f in json_block['APs']:
       tot_lat.append(json_block['APs'][f]['latitude'])
       tot_lng.append(json_block['APs'][f]['longitude'])
@@ -161,7 +165,7 @@ class dataHandler:
 	    json_block['APs'][f]['reliable']=1
     
     for f in json_block['APs']:
-      self.pprint(json_block['APs'][f])
+      self.pprint(json_block['APs'][f],f)
     
     if summ_num>0 and sum_lat>0 and sum_lng>0:
       print  '+ Position: http://maps.google.it/maps?q=' + str(sum_lat/summ_num) + ',' + str(sum_lng/summ_num)
@@ -172,7 +176,7 @@ class dataHandler:
       self.json_map[timestamp]=json_block
       self.lock.release()
 
-      self.f.write(pprint.pformat(json_block))
+      self.f.write(pprint.pformat(json_block) + '\n')
       self.f.flush()
 
 class httpRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
@@ -226,7 +230,7 @@ class httpHandler ( threading.Thread ):
       try:
 	httpd = SocketServer.TCPServer(('', 8000), httpRequestHandler)
       except Exception, e:
-	print '! Error opening HTTP server.', e
+	print '!', e
 	http_running=False
       else:
 	http_running=True
@@ -260,7 +264,7 @@ class macHandler:
 
   def getLocation(self,addr):
 
-    jsons=[]
+    jsons={}
 
     for a in addr:
 
@@ -277,7 +281,7 @@ class macHandler:
 	  conn.request("POST", "/loc/json", params, headers)
 	  response = conn.getresponse()
 	except Exception, e:
-	  print '! Error querying Google:', e
+	  print '! Error querying Google for',a, e
 	  continue
 	
 	try:
@@ -291,10 +295,8 @@ class macHandler:
 	  if 'address' in j:
 	    print '+',
 	    
-	    j['mac_address']=a[0]
 	    j['essid']=a[1]
-	    
-	    jsons.append(j)
+	    jsons[a[0]]=j
 	    
 	    done=True
 	    break
@@ -343,8 +345,13 @@ def main():
   try:
     httpHandler().start()
   except Exception, e:
-    print '! Error running HTTP thread , exiting.'
+    print '! Error running HTTP thread. Quitting.'
     http_running=False
+    exit(0)
+  
+  time.sleep(1)
+  if not http_running:
+    print '! Error opening HTTP server.'
     exit(0)
 
   webbrowser.open('http://localhost:8000')
