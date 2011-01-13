@@ -35,6 +35,9 @@ class dataHandler:
   lock=None
   
   def __init__(self):
+    pass
+  
+  def openfile(self):
     
     dirr = 'log'
     if not os.path.exists(dirr):
@@ -44,10 +47,19 @@ class dataHandler:
       os.chown(dirr,int(os.getenv("SUDO_UID")),int(os.getenv("SUDO_GID")))
     else:
       os.chmod(dirr,0777)
-   
-    fpath = 'log/' + time.strftime("%d-%b-%Y-%H:%M:%S", time.gmtime()) + '.log'
-    self.f = open(fpath,'w')
     
+    i=0
+    tm = time.strftime("%d-%b-%Y", time.gmtime())
+    
+    path = 'log/' +  tm + '-' + str(i) + '.log' 
+    while(os.path.exists(path)):
+      i+=1
+      path = 'log/' +  tm + '-' + str(i) + '.log' 
+    
+    print '+ Saving AP datas in', path 
+    
+    self.f = open(path,'w')
+      
     self.lock = threading.Lock()
     
   def pprint(self,j):
@@ -301,15 +313,7 @@ machandler=macHandler()
 
 def main():
   
-  global http_running
-  
-  try:
-    httpHandler().start()
-  except Exception, e:
-    print '! Error running HTTP thread , exiting.'
-    http_running=False
-    exit(0)
-
+  global http_running,data,machandler
 
   single=False
   if len(sys.argv) == 2:
@@ -333,6 +337,15 @@ def main():
   else:
       usage()
       exit(0)
+
+  data.openfile()
+
+  try:
+    httpHandler().start()
+  except Exception, e:
+    print '! Error running HTTP thread , exiting.'
+    http_running=False
+    exit(0)
 
   webbrowser.open('http://localhost:8000')
 
