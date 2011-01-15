@@ -2,7 +2,7 @@
 
 from subprocess import Popen, PIPE, STDOUT
 import re, httplib, urllib, json, os, sys, time, pprint,math, stat
-import threading, SimpleHTTPServer, SocketServer, socket, webbrowser
+import threading, SimpleHTTPServer, SocketServer, socket, webbrowser, privilege
 
 #sudo tcpdump -i mon0 -s 0 -e link[25] != 0x80
 #sudo aa-complain /usr/sbin/tcpdump  
@@ -12,6 +12,27 @@ import threading, SimpleHTTPServer, SocketServer, socket, webbrowser
 http_running=False
 
 
+def touch(p): 
+  open(p,'w').close() 
+
+def run_as_user(function, *args):
+  pid = os.fork() 
+  if pid == 0: # son
+    #print os.getuid(), os.getgid(), privilege.getresuid(), privilege.getresgid()
+    if os.geteuid() == 0:
+	useruid=int(os.getenv("SUDO_UID")) 
+	usergid=int(os.getenv("SUDO_GID"))
+	if usergid and useruid:
+	  privilege.drop_privileges_permanently(useruid, usergid, [1])
+	  function( *args )
+        else:
+	  print '+ + Point your web browser to http://localhost:8000 for the graphical map gui'
+	  
+    #print os.getuid(), os.getgid(), privilege.getresuid(), privilege.getresgid()
+    sys.exit(0)
+
+#print 'root', os.getuid(), os.getgid()
+  
 def standard_deviation(sequence):
   med = sum(sequence) / len(sequence)
   variance = sum([(x-med)**2 for x in sequence]) / len(sequence)
@@ -21,10 +42,10 @@ def standard_deviation(sequence):
 def exit(r=0):
   http_running = False
   
-  if not data.f.closed:
-    data.f.close()
-    
-  if data.lock.locked():
+  if data.f and not data.f.closed:
+      data.f.close()
+      
+  if data.lock and data.lock.locked():
     data.lock.release()
   
   sys.exit(r)
@@ -41,12 +62,7 @@ class dataHandler:
     
     dirr = 'log'
     if not os.path.exists(dirr):
-      os.makedirs(dirr)
-      
-    if os.getenv("SUDO_UID") and os.getenv("SUDO_GID"):
-      os.chown(dirr,int(os.getenv("SUDO_UID")),int(os.getenv("SUDO_GID")))
-    else:
-      os.chmod(dirr,0777)
+      run_as_user(os.makedirs,dirr)
     
     i=0
     tm = time.strftime("%d-%b-%Y", time.gmtime())
@@ -58,6 +74,11 @@ class dataHandler:
     
     print '+ Saving AP datas in', path 
     
+    run_as_user(touch,path)
+    
+    while not os.path.exists(path):
+      time.sleep(1)
+
     self.f = open(path,'w')
       
     self.lock = threading.Lock()
@@ -179,7 +200,20 @@ class dataHandler:
       self.f.write(pprint.pformat(json_block) + '\n')
       self.f.flush()
 
+
+class StoppableHttpServer (SocketServer.TCPServer):
+    """http server that reacts to self.stop flag"""
+
+    def serve_forever (self):
+	global http_running
+      
+        """Handle one request at a time until stopped."""
+        http_running = True
+        while http_running:
+            self.handle_request()
+
 class httpRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
+   
   def do_GET(self):
     try:
       if self.path.endswith(".json"):
@@ -218,17 +252,13 @@ class httpHandler ( threading.Thread ):
   
    global http_running
    httpd = None
-  
+   
    def run ( self ):
     
       global http_running
 
-      http_timeout = 5
-      socket.setdefaulttimeout(http_timeout)
-
-      server_address = ('127.0.0.1', 8000)
       try:
-	httpd = SocketServer.TCPServer(('', 8000), httpRequestHandler)
+	httpd = StoppableHttpServer(('', 8000), httpRequestHandler)
       except Exception, e:
 	print '!', e
 	http_running=False
@@ -236,9 +266,7 @@ class httpHandler ( threading.Thread ):
 	http_running=True
 	sa = httpd.socket.getsockname()
 	print "+ Running HTTP server on", sa[0], "port", sa[1], "..."
-	while http_running:
-	    httpd.handle_request()
-	httpd.socket.close()
+	httpd.serve_forever()
 	
 
 def usage():
@@ -354,7 +382,9 @@ def main():
     print '! Error opening HTTP server.'
     exit(0)
 
-  webbrowser.open('http://localhost:8000')
+  run_as_user(webbrowser.open,'http://localhost:8000')
+  #webbrowser.open('http://localhost:8000')
+  #print '+ + Point your web browser to http://localhost:8000 for the graphical map gui'
 
   while http_running:  
     
@@ -384,7 +414,7 @@ if __name__ == "__main__":
   
   try:
     main()
-  except (KeyboardInterrupt, SystemExit):
+  except (KeyboardInterrupt):
     http_running = False
     print '! Quitting in few seconds...\n'
     exit(0)  
