@@ -25,9 +25,9 @@ def run_as_user(function, *args):
 	if usergid and useruid:
 	  privilege.drop_privileges_permanently(useruid, usergid, [1])
 	  function( *args )
-        else:
-	  print '+ + Point your web browser to http://localhost:8000 for the graphical map gui'
-	  
+    else:
+      function( *args )
+      
     #print os.getuid(), os.getgid(), privilege.getresuid(), privilege.getresgid()
     sys.exit(0)
 
@@ -72,13 +72,20 @@ class dataHandler:
       i+=1
       path = 'log/' +  tm + '-' + str(i) + '.log' 
     
-    print '+ Saving AP datas in', path 
-    
     run_as_user(touch,path)
     
-    while not os.path.exists(path):
-      time.sleep(1)
+    created=False
+    for i in range(10):
+      if not os.path.exists(path):
+	time.sleep(1)
+      else:
+	created=True
+	break
 
+    if not created:
+      print '+ Error creating', path, 'with dropped privileges.'
+
+    print '+ Saving AP datas in', path 
     self.f = open(path,'w')
       
     self.lock = threading.Lock()
@@ -383,8 +390,7 @@ def main():
     exit(0)
 
   run_as_user(webbrowser.open,'http://localhost:8000')
-  #webbrowser.open('http://localhost:8000')
-  #print '+ + Point your web browser to http://localhost:8000 for the graphical map gui'
+  print '+ + If map web page doesn\'t open automatically on your browser, point it to http://localhost:8000'
 
   while http_running:  
     
