@@ -209,18 +209,19 @@ class dataHandler:
 
 
 class StoppableHttpServer (SocketServer.TCPServer):
-    """http server that reacts to self.stop flag"""
 
     def serve_forever (self):
 	global http_running
-      
-        """Handle one request at a time until stopped."""
-        http_running = True
+	http_running = True
         while http_running:
             self.handle_request()
 
 class httpRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
    
+   
+  def log_request(self, code='-', size='-'):
+    pass
+  
   def do_GET(self):
     try:
       if self.path.endswith(".json"):
