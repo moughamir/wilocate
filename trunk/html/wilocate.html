@@ -12,7 +12,8 @@
 
     //risolvere che zooma sempre
 
-    var jsondata={};
+    var json={};
+    var json2={};
     var aplist={};
     var poslist={};
     var lastpos;
@@ -50,9 +51,25 @@
 	}
     }
 
-    function htmlify(j) {
+    function htmlify() {
 
-	var blockprint = '<h3>' + j['essid'] + '<h3/>' + j['mac_address'] + '<br/>';
+	j=json[b]['APs'][m]
+	j2=json2[m]
+
+	var blockprint = '<h3>' + j2['ESSID'] + '</h3>' + m + '<br/>';
+
+
+	if('Encryption' in j2) {
+	    for (e in j2['Encryption']) {
+	      blockprint += e + ' ';
+	      for (c in j2['Encryption'][e]) {
+		blockprint += j2['Encryption'][e][c] + ' ';
+		}
+	    }
+	}
+
+	blockprint += '<br/>';
+
 
 	if('address' in j) {
 	  if ('country' in j['address'])
@@ -91,7 +108,7 @@
 	return blockprint
     }
 
-    function updateMarker(a) {
+    function updateMarker() {
 
 
 	var pos = new google.maps.LatLng(json[b]['APs'][m]['latitude'],json[b]['APs'][m]['longitude']);
@@ -99,7 +116,7 @@
 	var marker = new google.maps.Marker({
 	    position: pos, 
 	    map: map, 
-	    title:a['essid'] + '\n' + a['mac_address'],
+	    title:json2[m]['ESSID'] + '\n' + m,
 	    icon:'ap.png'
 	});   
 
@@ -107,7 +124,7 @@
 
 	google.maps.event.addListener(marker, 'mouseover', function(event) {
 // 	    alert(marker.getTitle());
-	    document.getElementById('marker_info').innerHTML = htmlify(a);
+	    document.getElementById('marker_info').innerHTML = htmlify(m,b);
 	});
 
 
@@ -115,7 +132,10 @@
     }
 
     function update(text) {
-	json=eval("(" + text + ")");
+	j=eval("(" + text + ")");
+	json=j['locations'];
+	json2=j['wifi'];
+	
 	if(json) {
 	  document.getElementById('marker_info').innerHTML = "APs datas loaded.";
 
@@ -134,7 +154,7 @@
 		    }
 		    else if(json[b]['APs'][m]['reliable']==1) {
 		    
-			  updateMarker(json[b]['APs'][m]);
+			  updateMarker(b,m);
       
 		    }
 

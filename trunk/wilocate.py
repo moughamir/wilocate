@@ -7,13 +7,14 @@ import threading, SimpleHTTPServer, SocketServer, socket, webbrowser, privilege
 #sudo tcpdump -i mon0 -s 0 -e link[25] != 0x80
 #sudo aa-complain /usr/sbin/tcpdump  
 
-# sincronizzare data.json_map
+# sincronizzare data.locations
 
 http_running=False
 
 
-def touch(p): 
-  open(p,'w').close() 
+def touch(files): 
+  for f in files:
+    open(f,'w').close() 
 
 def run_as_user(function, *args):
   pid = os.fork() 
@@ -42,17 +43,21 @@ def standard_deviation(sequence):
 def exit(r=0):
   http_running = False
   
-  if data.f and not data.f.closed:
-      data.f.close()
+  if jsondata.f and not jsondata.f.closed:
+      jsondata.f.close()
       
-  if data.lock and data.lock.locked():
-    data.lock.release()
+  if jsondata.lock and jsondata.lock.locked():
+    jsondata.lock.release()
   
   sys.exit(r)
 
-class dataHandler:
-  json_map={}
-  f=None
+class jsondataHandler:
+  locations={}
+  wifis={}
+  
+  
+  flocation=None
+  fwifi=None
   lock=None
   
   def __init__(self):
@@ -67,16 +72,16 @@ class dataHandler:
     i=0
     tm = time.strftime("%d-%b-%Y", time.gmtime())
     
-    path = 'log/' +  tm + '-' + str(i) + '.log' 
-    while(os.path.exists(path)):
+    path = 'log/' +  tm + '-' + str(i)
+    while os.path.exists(path + '.loc') and os.path.exists(path + '.wifi'):
       i+=1
-      path = 'log/' +  tm + '-' + str(i) + '.log' 
-    
-    run_as_user(touch,path)
+      path = 'log/' +  tm + '-' + str(i)
+      
+    run_as_user(touch, [ path + '.loc', path + '.wifi'])
     
     created=False
     for i in range(10):
-      if not os.path.exists(path):
+      if not os.path.exists(path + '.loc') and os.path.exists(path + '.wifi'):
 	time.sleep(1)
       else:
 	created=True
@@ -99,7 +104,7 @@ class dataHandler:
     else:
       blockprint += '- ' 
     
-    blockprint += m + ' ' + j['essid'] + ' (' + str(j['latitude']) + ',' + str(j['longitude']) + ') ' 
+    blockprint += m + ' ' + self.wifis[m]['ESSID'] + ' (' + str(j['latitude']) + ',' + str(j['longitude']) + ') ' 
   
     if 'address' in j:
       if 'country' in j['address']:
@@ -141,30 +146,35 @@ class dataHandler:
 
   def extract(self):
     self.lock.acquire()
-    toret = json_map.copy()
+    toret = locations.copy()
     self.lock.release()
     return toret
     
   
-  def insert(self,jsons):
+  def insertLocation(self,aps,jsons):
 
     blockprint=''
-
     json_block={}
 
-    print '\n## Snapshot at ' + time.strftime("%d-%b-%Y-%H:%M:%S", time.gmtime()) + ':'
+    print '+ + + Snapshot at ' + time.strftime("%d-%b-%Y-%H:%M:%S", time.gmtime()) + ':'
     
-    for a in jsons:
+    l = len(self.wifis)
+    self.wifis.update(aps)
+    diff = len(self.wifis)-l
+    if diff>0:
+      print '+ New', str(diff), 'Access Points', '(' + str(len(self.wifis)) + ')'
+    
+    for loc in jsons:
 
-      j= jsons[a]
+      j= jsons[loc]
       
       if 'accuracy' in j and 'latitude' in j and 'longitude' in j:
 	
 	if 'APs' not in json_block:
 	  json_block['APs']={}
 	  
-	json_block['reliable']=0  
-	json_block['APs'][a]=j.copy()
+	json_block['reliable']=0 
+	json_block['APs'][loc]=j.copy()
 
     timestamp = int(time.time())  
     tot_lat=[]
@@ -184,13 +194,17 @@ class dataHandler:
     sum_lng=0
     summ_num=0
     for f in json_block['APs']:
-      if json_block['APs'][f]['accuracy'] < 22000:  
 	if json_block['APs'][f]['latitude'] >= media_lat-sd_lat and json_block['APs'][f]['latitude'] <= media_lat+sd_lat:
 	  sum_lat+=json_block['APs'][f]['latitude']
 	  if json_block['APs'][f]['longitude'] >= media_lng-sd_lng and json_block['APs'][f]['longitude'] <= media_lng+sd_lng:
 	    sum_lng+=json_block['APs'][f]['longitude']
 	    summ_num+=1
 	    json_block['APs'][f]['reliable']=1
+	    
+	
+	if json_block['APs'][f]['accuracy'] > 22000:  
+	  print 'Ho rifiutato', f, 'con', json_block['APs'][f]['accuracy']
+	  reliable=0
     
     for f in json_block['APs']:
       self.pprint(json_block['APs'][f],f)
@@ -201,7 +215,7 @@ class dataHandler:
       json_block['position'] = [ sum_lat/summ_num, sum_lng/summ_num ]
 
       self.lock.acquire()
-      self.json_map[timestamp]=json_block
+      self.locations[timestamp]=json_block
       self.lock.release()
 
       self.f.write(pprint.pformat(json_block) + '\n')
@@ -229,7 +243,10 @@ class httpRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
 	self.send_response(200)
 	self.send_header('Content-type','application/x-javascript')
 	self.end_headers()
-	self.wfile.write(json.dumps(data.json_map))
+	
+	merged={ 'locations' : jsondata.locations, 'wifi' : jsondata.wifis }
+	
+	self.wfile.write(json.dumps(merged))
 	return
 	
       elif self.path=='/' or self.path.endswith(".html"):
@@ -285,17 +302,82 @@ class macHandler:
   def __init__(self):
     pass
 
-  def getAddresses(self):
-    
-    newaddr=[]
-    
+  def getScan(self):
+	
+    data = {}
+    lastcell=''
+    lastauth=''
+
     cmd = 'iwlist scan'
-    p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
+    pop = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
+
+    for l in pop.stdout.read().split('\n'):
+      p = l.strip()
+      spa = [x.strip() for x in p.split(' ')]
+      sp = [x.strip(':') for x in spa]
+      
+      # If Cell i create new key with mac address
+      if sp[0] == 'Cell' and sp[3] == 'Address':
+	lastcell=sp[4]
+	data[lastcell]={}
+	
+      elif sp[0].startswith('Channel') or sp[0].startswith('Frequency') or sp[0].startswith('Mode') or sp[0].startswith('ESSID'):
+	splitted = sp[0].split(':') + sp[1:]
+	data[lastcell][splitted[0]]=splitted[1].strip('"') # For ESSID
+	#append
+	if sp[0].startswith('Frequency') and len(splitted)==5 and splitted[3]=='(Channel':
+	  data[lastcell][splitted[0]]+=splitted[2]
+	  data[lastcell]['Channel']=splitted[4][0]
+      elif sp[0].startswith('Quality') and sp[2] == 'Signal':
+	if '=' in sp[0] and len(sp[0])==2:
+	  quality = sp[0].split('=')[1]
+	  data[lastcell]['Quality'] = quality
+	if '=' in sp[3] and len(sp[0])==4:
+	  level = sp[3].split('=')[1]
+	  data[lastcell]['Level'] = level
+      elif sp[0] == 'Encryption' and sp[1].startswith('key'):
+	if sp[1].split(':')[1] == 'on':
+	  if 'Encryption' not in data[lastcell]:
+	    data[lastcell]['Encryption']= {}
+	    
+	    #Traceback (most recent call last):
+	    #File "wilocate.py", line 486, in <module>
+	      #main()
+	    #File "wilocate.py", line 464, in main
+	      #aps = machandler.getScan()
+	    #File "wilocate.py", line 348, in getScan
+	      #data[lastcell]['Encryption'][lastauth][sp[0]]=value
+	  #KeyError: 'WPA Version 1'
+
+      elif sp[0] == 'IE' and sp[1] != 'Unknown':
+	lastauth=' '.join(sp[1:])
+	if 'Encryption' not in data[lastcell]:
+	  data[lastcell]['Encryption']= {}
+	data[lastcell]['Encryption'][lastauth]={}
+      elif sp[0] == 'Group' or sp[0] == 'Pairwise' or sp[0] == 'Authentication':
+	# The separator is '' (void array slot), because i stripped out :
+	value=''
+	if '' in sp:
+	  where = sp.index('')
+	  value=' '.join(sp[where:]).strip()
+	
+	if 'Encryption' not in data[lastcell]:
+	  data[lastcell]['Encryption']= {}
+	data[lastcell]['Encryption'][lastauth][sp[0]]=value
+	
+    return data
+
+  #def getAddresses(self):
     
-    newaddr = re.findall('Address: ((?:[0-9A-Z][0-9A-Z]:?){6})[\s\S]*?ESSID:"(.*)"', p.stdout.read())
+    #newaddr=[]
     
-    print '* '*(len(newaddr)),
-    return newaddr
+    #cmd = 'iwlist scan'
+    #p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
+    
+    #newaddr = re.findall('Address: ((?:[0-9A-Z][0-9A-Z]:?){6})[\s\S]*?ESSID:"(.*)"', p.stdout.read())
+    
+    #print '* '*(len(newaddr)),
+    #return newaddr
 
 
   def getLocation(self,addr):
@@ -310,7 +392,7 @@ class macHandler:
 	
 	sys.stdout.flush()
 	
-	params = "{ \"version\": \"1.1.0\", \"host\": \"maps.google.com\", \"request_address\": \"true\", \"address_language\":\"en_GB\", \"wifi_towers\": [ { \"mac_address\": " + a[0].replace(':','-') + ", \"signal_strength\": 8, \"age\": 0 } ] }"
+	params = "{ \"version\": \"1.1.0\", \"host\": \"maps.google.com\", \"request_address\": \"true\", \"address_language\":\"en_GB\", \"wifi_towers\": [ { \"mac_address\": " + a.replace(':','-') + ", \"signal_strength\": 8, \"age\": 0 } ] }"
 	headers = { "Pragma" : "no-cache", "Cache-control" : "no-cache" }
 	conn = httplib.HTTPConnection("www.google.com:80")
 	try:
@@ -331,8 +413,7 @@ class macHandler:
 	  if 'address' in j:
 	    print '+',
 	    
-	    j['essid']=a[1]
-	    jsons[a[0]]=j
+	    jsons[a]=j
 	    
 	    done=True
 	    break
@@ -346,12 +427,12 @@ class macHandler:
     print ''
     return jsons
 
-data = dataHandler()
+jsondata = jsondataHandler()
 machandler=macHandler()
 
 def main():
   
-  global http_running,data,machandler
+  global http_running,jsondata,machandler
 
   single=False
   if len(sys.argv) == 2:
@@ -376,7 +457,7 @@ def main():
       usage()
       exit(0)
 
-  data.openfile()
+  jsondata.openfile()
 
   try:
     httpHandler().start()
@@ -390,23 +471,23 @@ def main():
     print '! Error opening HTTP server.'
     exit(0)
 
-  run_as_user(webbrowser.open,'http://localhost:8000')
-  print '+ + If map web page doesn\'t open automatically on your browser, point it to http://localhost:8000'
+  #run_as_user(webbrowser.open,'http://localhost:8000')
+  print '+ + + If map web page doesn\'t open automatically on your browser, point it to http://localhost:8000'
 
   while http_running:  
     
     if single is True:
-      addr = [sys.argv[1]]  
+      aps = { sys.argv[1] : {} }  
     else:
-      addr = machandler.getAddresses()
-      if len(addr)==0:
+      aps = machandler.getScan()
+      if len(aps)==0:
 	print '! No AP founded while scanning.'
     
-    jsons = machandler.getLocation(addr)
-    if len(jsons)==0:
+    locs = machandler.getLocation(aps.keys())
+    if len(locs)==0:
       print '! No  MAC address founded in Google API database.'
     else:
-      data.insert(jsons)
+      jsondata.insertLocation(aps,locs)
   
     if single is not True:
       time.sleep(5)
