@@ -7,7 +7,6 @@ import threading, SimpleHTTPServer, SocketServer, socket, webbrowser, privilege
 #sudo tcpdump -i mon0 -s 0 -e link[25] != 0x80
 #sudo aa-complain /usr/sbin/tcpdump  
 
-# sincronizzare data.locations
 
 http_running=False
 
@@ -41,13 +40,25 @@ def standard_deviation(sequence):
     
 
 def exit(r=0):
-  http_running = False
+  global http_running
   
-  if jsondata.f and not jsondata.f.closed:
-      jsondata.f.close()
+  http_running = False
+  print '! Quitting.\n'
       
-  if jsondata.lock and jsondata.lock.locked():
-    jsondata.lock.release()
+  jsondata.close()    
+  #if jsondata.flocation and not jsondata.flocation.closed:
+      #jsondata.flocation.close()
+
+  #if jsondata.fwifi and not jsondata.fwifi.closed:
+      #jsondata.fwifi.close()
+
+  #if jsondata.locklocation and jsondata.locklocation.locked():
+    #jsondata.locklocation.release()
+  
+  #if jsondata.lockwifi and jsondata.lockwifi.locked():
+    #jsondata.lockwifi.release()
+  
+  urllib.urlopen('http://localhost:8000/')
   
   sys.exit(r)
 
@@ -55,14 +66,25 @@ class jsondataHandler:
   locations={}
   wifis={}
   
-  
   flocation=None
   fwifi=None
-  lock=None
+  locklocation=None
+  lockwifi=None
   
   def __init__(self):
     pass
   
+  def close(self):
+    
+    if self.flocation:
+      self.flocation.close()
+    if self.fwifi:
+      self.fwifi.close()
+    if self.lockwifi and self.lockwifi.locked():
+      self.lockwifi.release()
+    if self.lockwifi and self.lockwifi.locked():
+      self.lockwifi.release()
+    
   def openfile(self):
     
     dirr = 'log'
@@ -91,9 +113,10 @@ class jsondataHandler:
       print '+ Error creating', path, 'with dropped privileges.'
 
     print '+ Saving AP datas in', path 
-    self.f = open(path,'w')
+    self.flocation = open(path,'w')
       
-    self.lock = threading.Lock()
+    self.locklocation = threading.Lock()
+    self.lockwifi = threading.Lock()
     
   def pprint(self,j,m):
     
@@ -104,7 +127,12 @@ class jsondataHandler:
     else:
       blockprint += '- ' 
     
-    blockprint += m + ' ' + self.wifis[m]['ESSID'] + ' (' + str(j['latitude']) + ',' + str(j['longitude']) + ') ' 
+    blockprint += m + ' '
+    if 'ESSID' in self.wifis[m]:
+      blockprint += self.wifis[m]['ESSID'] 
+    
+    if 'latitude' and 'longitude':
+      blockprint += ' (' + str(j['latitude']) + ',' + str(j['longitude']) + ') ' 
   
     if 'address' in j:
       if 'country' in j['address']:
@@ -145,9 +173,9 @@ class jsondataHandler:
       
 
   def extract(self):
-    self.lock.acquire()
+    self.locklocation.acquire()
     toret = locations.copy()
-    self.lock.release()
+    self.locklocation.release()
     return toret
     
   
@@ -214,22 +242,22 @@ class jsondataHandler:
       
       json_block['position'] = [ sum_lat/summ_num, sum_lng/summ_num ]
 
-      self.lock.acquire()
+      self.locklocation.acquire()
       self.locations[timestamp]=json_block
-      self.lock.release()
+      self.locklocation.release()
 
-      self.f.write(pprint.pformat(json_block) + '\n')
-      self.f.flush()
+      self.flocation.write(pprint.pformat(json_block) + '\n')
+      self.flocation.flush()
 
 
 class StoppableHttpServer (SocketServer.TCPServer):
 
     def serve_forever (self):
 	global http_running
-	http_running = True
         while http_running:
             self.handle_request()
-
+            
+    
 class httpRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
    
    
@@ -275,7 +303,6 @@ class httpRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
 
 class httpHandler ( threading.Thread ):
   
-   global http_running
    httpd = None
    
    def run ( self ):
@@ -285,7 +312,7 @@ class httpHandler ( threading.Thread ):
       try:
 	httpd = StoppableHttpServer(('', 8000), httpRequestHandler)
       except Exception, e:
-	print '!', e
+	print '! Error running HTTP server', e
 	http_running=False
       else:
 	http_running=True
@@ -439,7 +466,7 @@ def main():
     
     if(sys.argv[1]=='--help' or sys.argv[1]=='-h'):
       usage()
-      exit(0)
+      jsondata.exit(0)
     
     elif not re.match("(?:[0-9A-Z][0-9A-Z](:|-)?){6}", sys.argv[1]):
       print '! Error: \'' + sys.argv[1] + '\' is not a MAC address with AA:BB:CC:DD:EE:FF format. Exiting.'
@@ -489,11 +516,10 @@ def main():
     else:
       jsondata.insertLocation(aps,locs)
   
-    if single is not True:
-      time.sleep(5)
-    else:
+    if single is True:
       break
-
+    time.sleep(5)
+    
 
 
 if __name__ == "__main__":
@@ -503,7 +529,7 @@ if __name__ == "__main__":
   try:
     main()
   except (KeyboardInterrupt):
-    http_running = False
-    print '! Quitting in few seconds...\n'
     exit(0)  
+  except (SystemExit):
+    sys.exit(0)
 

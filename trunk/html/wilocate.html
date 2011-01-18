@@ -47,7 +47,7 @@
 
 	if(toZoom) {
 // 	  document.getElementById('marker_info').innerHTML = "ZOOOMO"
-	  map.fitBounds (bounds);
+ 	  map.fitBounds (bounds);
 	}
     }
 
@@ -165,6 +165,7 @@
 	      if('position' in json[b]) {
 
 		    var actual_pos = new google.maps.LatLng(json[b]['position'][0],json[b]['position'][1]);
+		    map.setCenter(actual_pos, 20); 
 
 		    if(!lastpos) {
 			
@@ -183,11 +184,11 @@
 			// Tra 1.113 km e 111.3 m
 			if(dist > 0.001) {
 
-// 			  map.setCenter(actual_pos, 15); 
 			  lastpos.setPosition(actual_pos);
 
 			}
 		    }
+
 	      }
 
 	      autozoom();
