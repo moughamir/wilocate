@@ -471,7 +471,7 @@ def main():
     print '! Error opening HTTP server.'
     exit(0)
 
-  #run_as_user(webbrowser.open,'http://localhost:8000')
+  run_as_user(webbrowser.open,'http://localhost:8000')
   print '+ + + If map web page doesn\'t open automatically on your browser, point it to http://localhost:8000'
 
   while http_running:  
