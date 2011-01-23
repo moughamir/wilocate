@@ -7,7 +7,6 @@ import threading, SimpleHTTPServer, SocketServer, socket, webbrowser, privilege
 #sudo tcpdump -i mon0 -s 0 -e link[25] != 0x80
 #sudo aa-complain /usr/sbin/tcpdump  
 
-
 http_running=False
 
 
@@ -31,8 +30,6 @@ def run_as_user(function, *args):
     #print os.getuid(), os.getgid(), privilege.getresuid(), privilege.getresgid()
     sys.exit(0)
 
-#print 'root', os.getuid(), os.getgid()
-  
 def standard_deviation(sequence):
   med = sum(sequence) / len(sequence)
   variance = sum([(x-med)**2 for x in sequence]) / len(sequence)
@@ -40,25 +37,18 @@ def standard_deviation(sequence):
     
 
 def exit(r=0):
+  print '! Quitting.\n'
+  
   global http_running
   
   http_running = False
-  print '! Quitting.\n'
       
   jsondata.close()    
-  #if jsondata.flocation and not jsondata.flocation.closed:
-      #jsondata.flocation.close()
-
-  #if jsondata.fwifi and not jsondata.fwifi.closed:
-      #jsondata.fwifi.close()
-
-  #if jsondata.locklocation and jsondata.locklocation.locked():
-    #jsondata.locklocation.release()
   
-  #if jsondata.lockwifi and jsondata.lockwifi.locked():
-    #jsondata.lockwifi.release()
-  
-  urllib.urlopen('http://localhost:8000/')
+  try:
+    urllib.urlopen('http://localhost:8000/')
+  except Exception, e:
+    pass
   
   sys.exit(r)
 
@@ -66,44 +56,36 @@ class jsondataHandler:
   locations={}
   wifis={}
   
-  flocation=None
-  fwifi=None
-  locklocation=None
-  lockwifi=None
+  path=''
+  lockjson=None
   
   def __init__(self):
     pass
   
   def close(self):
     
-    if self.flocation:
-      self.flocation.close()
-    if self.fwifi:
-      self.fwifi.close()
-    if self.lockwifi and self.lockwifi.locked():
-      self.lockwifi.release()
-    if self.lockwifi and self.lockwifi.locked():
+    if self.lockjson and self.lockjson.locked():
       self.lockwifi.release()
     
-  def openfile(self):
-    
-    dirr = 'log'
+  def createfile(self):
+
+    tm = time.strftime("%d-%b-%Y", time.gmtime())
+
+    dirr = 'log-' + tm
     if not os.path.exists(dirr):
       run_as_user(os.makedirs,dirr)
     
     i=0
-    tm = time.strftime("%d-%b-%Y", time.gmtime())
-    
-    path = 'log/' +  tm + '-' + str(i)
-    while os.path.exists(path + '.loc') and os.path.exists(path + '.wifi'):
+    path = dirr + os.sep + str(i) + '.log'
+    while os.path.exists(path):
       i+=1
-      path = 'log/' +  tm + '-' + str(i)
-      
-    run_as_user(touch, [ path + '.loc', path + '.wifi'])
+      path = dirr + os.sep + str(i) + '.log'
+    
+    run_as_user(touch, [ path ])
     
     created=False
     for i in range(10):
-      if not os.path.exists(path + '.loc') and os.path.exists(path + '.wifi'):
+      if not os.path.exists(path):
 	time.sleep(1)
       else:
 	created=True
@@ -112,17 +94,27 @@ class jsondataHandler:
     if not created:
       print '+ Error creating', path, 'with dropped privileges.'
 
+    self.path=path
     print '+ Saving AP datas in', path 
-    self.flocation = open(path,'w')
-      
-    self.locklocation = threading.Lock()
-    self.lockwifi = threading.Lock()
+    
+    self.lockjson = threading.Lock()
+    
+  def writeout(self,string):
+    f = open(self.path,'w')
+    f.write(pprint.pformat(string))
+    f.close()
+    
+  def getJson(self):
+    self.lockjson.acquire()
+    toret = { 'locations' : self.locations, 'wifi' : self.wifis }
+    self.lockjson.release()
+    return toret
     
   def pprint(self,j,m):
     
     blockprint=''
     
-    if 'reliable' in j:
+    if 'reliable' in j and j['reliable'] == 1:
       blockprint += '+ ' 
     else:
       blockprint += '- ' 
@@ -170,86 +162,75 @@ class jsondataHandler:
       blockprint += '(' + str(j['accuracy']) + ') '
        
     print blockprint
-      
-
-  def extract(self):
-    self.locklocation.acquire()
-    toret = locations.copy()
-    self.locklocation.release()
-    return toret
     
-  
-  def insertLocation(self,aps,jsons):
-
-    blockprint=''
-    json_block={}
-
-    print '+ + + Snapshot at ' + time.strftime("%d-%b-%Y-%H:%M:%S", time.gmtime()) + ':'
+  def insertLocation(self,aps,locs):
     
-    l = len(self.wifis)
-    self.wifis.update(aps)
-    diff = len(self.wifis)-l
-    if diff>0:
-      print '+ New', str(diff), 'Access Points', '(' + str(len(self.wifis)) + ')'
-    
-    for loc in jsons:
-
-      j= jsons[loc]
-      
-      if 'accuracy' in j and 'latitude' in j and 'longitude' in j:
-	
-	if 'APs' not in json_block:
-	  json_block['APs']={}
-	  
-	json_block['reliable']=0 
-	json_block['APs'][loc]=j.copy()
-
-    timestamp = int(time.time())  
     tot_lat=[]
     tot_lng=[]
+    timestamp = int(time.time())      
+      
+    nextloc = { }
     
+    for a in locs:
     
-    for f in json_block['APs']:
-      tot_lat.append(json_block['APs'][f]['latitude'])
-      tot_lng.append(json_block['APs'][f]['longitude'])
+      # Controllo se a sta in aps sia in locs
+      if aps.has_key(a):
+	l = locs[a].copy()
+      else:
+	print '! Error,', a, ' not found in location datas'
+	continue
+
     
-    sd_lat=standard_deviation(tot_lat)*1.1
-    sd_lng=standard_deviation(tot_lng)*1.1
+      # Controllo che non ci sia gia tra i wifis
+      if a not in self.wifis or (a in self.wifis and 'accuracy' in self.wifis[a] and l['accuracy'] < self.wifis[a]['accuracy']):
+	
+	# Ci copio aps[a]locations
+	self.wifis[a]=aps[a]
+	self.wifis[a]['location']=l
+	self.wifis[a]['location']['reliable']=0 
+
+      # Mi sengo latitudini e longitudini per la deviazione standard
+      tot_lat.append(self.wifis[a]['location']['latitude'])
+      tot_lng.append(self.wifis[a]['location']['longitude'])
+
+      # Inserisco tra le locations
+      if 'APs' not in nextloc:
+	nextloc={'APs' : []}
+      nextloc['APs'].append(a)
+    
+    self.locations[timestamp] = nextloc.copy()
+    
+    # A fine ciclo, riciclo per settare i reliable  
+    sd_lat=standard_deviation(tot_lat)*1.2
+    sd_lng=standard_deviation(tot_lng)*1.2
     media_lat = sum(tot_lat) / len(tot_lat)
     media_lng = sum(tot_lng) / len(tot_lng)
-    
     sum_lat=0
     sum_lng=0
     summ_num=0
-    for f in json_block['APs']:
-	if json_block['APs'][f]['latitude'] >= media_lat-sd_lat and json_block['APs'][f]['latitude'] <= media_lat+sd_lat:
-	  sum_lat+=json_block['APs'][f]['latitude']
-	  if json_block['APs'][f]['longitude'] >= media_lng-sd_lng and json_block['APs'][f]['longitude'] <= media_lng+sd_lng:
-	    sum_lng+=json_block['APs'][f]['longitude']
-	    summ_num+=1
-	    json_block['APs'][f]['reliable']=1
-	    
-	
-	if json_block['APs'][f]['accuracy'] > 22000:  
-	  print 'Ho rifiutato', f, 'con', json_block['APs'][f]['accuracy']
-	  reliable=0
     
-    for f in json_block['APs']:
-      self.pprint(json_block['APs'][f],f)
+    for a in self.locations[timestamp]['APs']:
+      if self.wifis[a]['location']['latitude'] >= media_lat-sd_lat and self.wifis[a]['location']['latitude'] <= media_lat+sd_lat and self.wifis[a]['location']['longitude'] >= media_lng-sd_lng and self.wifis[a]['location']['longitude'] <= media_lng+sd_lng:
+	  sum_lng+=self.wifis[a]['location']['longitude']
+	  sum_lat+=self.wifis[a]['location']['latitude']
+	  summ_num+=1
+	  self.wifis[a]['location']['reliable']=1
+	  
+      
+      if self.wifis[a]['location']['accuracy'] > 22000:  
+	print 'Ho rifiutato', a, 'con', self.wifis[a]['location']['accuracy']
+	self.wifis[a]['location']['reliable']=0
+  
+      self.pprint(self.wifis[a]['location'],a)
     
     if summ_num>0 and sum_lat>0 and sum_lng>0:
       print  '+ Position: http://maps.google.it/maps?q=' + str(sum_lat/summ_num) + ',' + str(sum_lng/summ_num)
       
-      json_block['position'] = [ sum_lat/summ_num, sum_lng/summ_num ]
-
-      self.locklocation.acquire()
-      self.locations[timestamp]=json_block
-      self.locklocation.release()
-
-      self.flocation.write(pprint.pformat(json_block) + '\n')
-      self.flocation.flush()
-
-
+      self.locations[timestamp]['position'] = [ sum_lat/summ_num, sum_lng/summ_num ]
+    
+    towrite = self.getJson()
+    self.writeout(towrite)
+    
 class StoppableHttpServer (SocketServer.TCPServer):
 
     def serve_forever (self):
@@ -272,9 +253,7 @@ class httpRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
 	self.send_header('Content-type','application/x-javascript')
 	self.end_headers()
 	
-	merged={ 'locations' : jsondata.locations, 'wifi' : jsondata.wifis }
-	
-	self.wfile.write(json.dumps(merged))
+	self.wfile.write(json.dumps(jsondata.getJson()))
 	return
 	
       elif self.path=='/' or self.path.endswith(".html"):
@@ -401,7 +380,7 @@ class macHandler:
     #cmd = 'iwlist scan'
     #p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
     
-    #newaddr = re.findall('Address: ((?:[0-9A-Z][0-9A-Z]:?){6})[\s\S]*?ESSID:"(.*)"', p.stdout.read())
+    #newaddr = re.findall('Address: ((?:[0-9A-Z][0-9nA-Z]:?){6})[\s\S]*?ESSID:"(.*)"', p.stdout.read())
     
     #print '* '*(len(newaddr)),
     #return newaddr
@@ -484,7 +463,7 @@ def main():
       usage()
       exit(0)
 
-  jsondata.openfile()
+  jsondata.createfile()
 
   try:
     httpHandler().start()
@@ -498,7 +477,7 @@ def main():
     print '! Error opening HTTP server.'
     exit(0)
 
-  run_as_user(webbrowser.open,'http://localhost:8000')
+  #run_as_user(webbrowser.open,'http://localhost:8000')
   print '+ + + If map web page doesn\'t open automatically on your browser, point it to http://localhost:8000'
 
   while http_running:  
@@ -511,6 +490,7 @@ def main():
 	print '! No AP founded while scanning.'
     
     locs = machandler.getLocation(aps.keys())
+    
     if len(locs)==0:
       print '! No  MAC address founded in Google API database.'
     else:
@@ -521,7 +501,6 @@ def main():
     time.sleep(5)
     
 
-
 if __name__ == "__main__":
 
   print '+ WiLocate		Version 0.1'
@@ -530,6 +509,4 @@ if __name__ == "__main__":
     main()
   except (KeyboardInterrupt):
     exit(0)  
-  except (SystemExit):
-    sys.exit(0)
 

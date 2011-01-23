@@ -51,7 +51,7 @@
 	}
     }
 
-    function htmlify() {
+    function htmlify(m,b) {
 
 	j=json[b]['APs'][m]
 	j2=json2[m]
@@ -70,25 +70,27 @@
 
 	blockprint += '<br/>';
 
+	j2=j2['location']
 
-	if('address' in j) {
-	  if ('country' in j['address'])
-	    blockprint += j['address']['country'] + ' '; 
+	if('address' in j2) {
+
+	  if ('country' in j2['address'])
+	    blockprint += j2['address']['country'] + ' '; 
 	    
-	  if ('country_code' in j['address'])
-	    blockprint +=  '(' + j['address']['country_code'] + ') ';
+	  if ('country_code' in j2['address'])
+	    blockprint +=  '(' + j2['address']['country_code'] + ') ';
 	    
-	  if('region' in j['address'])
-	    blockprint +=  j['address']['region'] + ' ';
+	  if('region' in j2['address'])
+	    blockprint +=  j2['address']['region'] + ' ';
 
-	  if('postal_code' in j['address'])
-	    blockprint +=  j['address']['postal_code'] + ' ';
+	  if('postal_code' in j2['address'])
+	    blockprint +=  j2['address']['postal_code'] + ' ';
 
-	  if('county' in j['address'])
-	    county = j['address']['county'] + ' ';
+	  if('county' in j2['address'])
+	    county = j2['address']['county'] + ' ';
 		  
-	  if('city' in j['address'])
-	    city = j['address']['city'] + ' ';
+	  if('city' in j2['address'])
+	    city = j2['address']['city'] + ' ';
 
 	  if (county != city)
 	    blockprint +=  city + ' ' + county + ' ';
@@ -97,21 +99,21 @@
 	  else
 	    blockprint +=  city + ' ';
 
-	  if('street' in j['address'])
-	    blockprint +=  j['address']['street'] + ' ';
+	  if('street' in j2['address'])
+	    blockprint +=  j2['address']['street'] + ' ';
 
-	  if('street_number' in j['address'])
-	    blockprint +=  j['address']['street_number'] + ' ';
+	  if('street_number' in j2['address'])
+	    blockprint +=  j2['address']['street_number'] + ' ';
 	    
 	  }
-	blockprint += '(' + j['accuracy'] + ') ';
+	blockprint += '(' + j2['accuracy'] + ') ';
 	return blockprint
     }
 
-    function updateMarker() {
+    function updateMarker(m) {
 
 
-	var pos = new google.maps.LatLng(json[b]['APs'][m]['latitude'],json[b]['APs'][m]['longitude']);
+	var pos = new google.maps.LatLng(json2[m]['location']['latitude'],json2[m]['location']['longitude']);
 
 	var marker = new google.maps.Marker({
 	    position: pos, 
@@ -144,23 +146,25 @@
 	    if(b>lasttime) {
 
 	      lasttime=b
-	      
-	      if('APs' in json[b])  {
+
+	      if('APs' in json[b]) {
 
 		  for (m in json[b]['APs']) {
 
-		    if(m in aplist) {
-			
-		    }
-		    else if(json[b]['APs'][m]['reliable']==1) {
-		    
-			  updateMarker(b,m);
-      
-		    }
+
+		      m=json[b]['APs'][m];
+		      
+		      if(m in aplist) {
+			  
+		      }
+		      else if(m in json2 && 'location' in json2[m] && 'reliable' in json2[m]['location'] && json2[m]['location']['reliable']==1) {
+			    updateMarker(m);
+	
+		      }
 
 
-		    }
 		  }
+	      }
 
 	      if('position' in json[b]) {
 
@@ -169,7 +173,7 @@
 
 		    if(!lastpos) {
 			
-// 			map.setCenter(actual_pos, 15); 
+			map.setCenter(actual_pos, 15); 
 			var marker = new google.maps.Marker({
 			    position: actual_pos, 
 			    map: map, 
