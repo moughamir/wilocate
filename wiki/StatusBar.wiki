@@ -1,0 +1,15 @@
+#summary One-sentence summary of this page.
+#labels Status
+
+= Status Bar =
+
+Status Bar.
+
+[https://dl-web.dropbox.com/get/wilocate/Wilocate_screenshot_001_info_status.jpg?w=b3ac8e68]
+
+= Details =
+
+Add your content here.  Format your content with:
+  * Text in *bold* or _italic_
+  * Headings, paragraphs, and lists
+  * Automatic links to other wiki pages
