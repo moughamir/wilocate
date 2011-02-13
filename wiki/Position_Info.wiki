@@ -1,0 +1,12 @@
+#summary One-sentence summary of this page.
+#labels Position,Info
+
+= Position Info =
+
+Position Info.
+
+[https://dl-web.dropbox.com/get/wilocate/Wilocate_screenshot_003_info_position.jpg?w=9650c139]
+
+= Details =
+
+Show positions list
