@@ -1,0 +1,12 @@
+#summary One-sentence summary of this page.
+#labels Status,Bar
+
+= Status Bar =
+
+Status Bar.
+
+[https://dl-web.dropbox.com/get/wilocate/Wilocate_screenshot_001_info_status.jpg?w=b3ac8e68]
+
+= Details =
+
+Show page status
