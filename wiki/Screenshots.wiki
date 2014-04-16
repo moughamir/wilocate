@@ -5,18 +5,17 @@
 
 Marker Info.
 
-[http://i53.tinypic.com/2d1w80h.jpg]
+[https://dl.dropboxusercontent.com/u/13521014/wilocate/Screenshot/Wilocate_screenshot_002_marker_info.jpg]
 
 
 = Access Point =
 
 Access Point.
 
-[http://i51.tinypic.com/a5e2hg.jpg]
-
+[https://dl.dropboxusercontent.com/u/13521014/wilocate/Screenshot/Wilocate_screenshot_004_access_point.jpg]
 
 = Position Info =
 
 Position Info.
 
-[http://i53.tinypic.com/bfl7qf.jpg]
+[https://dl.dropboxusercontent.com/u/13521014/wilocate/Screenshot/Wilocate_screenshot_003_info_position.jpg]
